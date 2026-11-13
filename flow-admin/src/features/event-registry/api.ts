@@ -1,4 +1,4 @@
-import { apiClient } from '@/api/http'
+import { adminBeClient, apiClient } from '@/api/http'
 import type { PageResult } from '@/types/api'
 
 export type EventFieldType = 'string' | 'integer' | 'long' | 'double' | 'boolean' | 'json'
@@ -95,19 +95,21 @@ const eventPath = (key: string) => `${EVENTS}/${encodeURIComponent(key)}`
 const channelPath = (key: string) => `${CHANNELS}/${encodeURIComponent(key)}`
 
 export const eventRegistryApi = {
-  events: () => apiClient.get<EventModelView[]>(EVENTS),
+  events: () => adminBeClient.get<EventModelView[]>(EVENTS),
   saveEvent: (key: string, payload: SaveEventModelCommand) =>
-    apiClient.put<EventModelView>(`${eventPath(key)}/draft`, payload),
+    adminBeClient.put<EventModelView>(`${eventPath(key)}/draft`, payload),
   publishEvent: (key: string, revision: number) =>
-    apiClient.post<EventModelView>(`${eventPath(key)}/publish`, null, { params: { revision } }),
-  deleteEvent: (key: string) => apiClient.delete<void>(eventPath(key)),
+    adminBeClient.post<EventModelView>(`${eventPath(key)}/publish`, null, { params: { revision } }),
+  deleteEvent: (key: string) => adminBeClient.delete<void>(eventPath(key)),
   usages: (key: string) => apiClient.get<EventUsagesView>(`${eventPath(key)}/usages`),
   waits: (eventKey: string, page: number, size: number) =>
     apiClient.get<PageResult<EventWaitView>>(WAITS, { params: { eventKey, page, size } }),
-  channels: () => apiClient.get<RestChannelView[]>(CHANNELS),
+  channels: () => adminBeClient.get<RestChannelView[]>(CHANNELS),
   saveChannel: (key: string, payload: SaveRestChannelCommand) =>
-    apiClient.put<RestChannelView>(`${channelPath(key)}/draft`, payload),
+    adminBeClient.put<RestChannelView>(`${channelPath(key)}/draft`, payload),
   publishChannel: (key: string, revision: number) =>
-    apiClient.post<RestChannelView>(`${channelPath(key)}/publish`, null, { params: { revision } }),
-  deleteChannel: (key: string) => apiClient.delete<void>(channelPath(key)),
+    adminBeClient.post<RestChannelView>(`${channelPath(key)}/publish`, null, {
+      params: { revision },
+    }),
+  deleteChannel: (key: string) => adminBeClient.delete<void>(channelPath(key)),
 }

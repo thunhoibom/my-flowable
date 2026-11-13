@@ -17,18 +17,27 @@ Kiến trúc tổng thể nằm ở `F:\flowable\2026-11-13-flow-admin-engine-ar
 
 ## Trạng thái
 
-Đây là khung ban đầu. Code soạn thảo (bản nháp, catalog, event registry) vẫn đang nằm trong `flow-engine` và sẽ chuyển sang đây theo lộ trình của spec.
+Giai đoạn 2 của spec: phần Design đã chuyển từ `flow-engine` sang đây. Hub làm ở giai đoạn 3.
 
-Module hiện có:
+Module:
 
-- `shared-kernel`: bản chép từ `flow-engine`. Repo này tự phát triển tiếp, không đồng bộ ngược về Flow Engine.
-- `admin-be-boot`: app Spring Boot, cổng mặc định `8081` (biến `ADMIN_BE_PORT`).
+- `shared-kernel`: bản chép từ `flow-engine`, phát triển độc lập.
+- `design-modeling`: Design. Bản nháp quy trình và phát hành, catalog dịch vụ, thư viện event/channel, client gọi Flow Engine (`designhub.engine.FlowEngineClient`). Java package giữ như trong `flow-engine`.
+- `hub-admin`: khung rỗng cho Hub (giai đoạn 3).
+- `admin-be-migrations`: Flyway cho bảng của Flow Admin BE, chung schema `public` với Flow Engine, bảng lịch sử riêng `flyway_schema_history_admin_be`. Chưa có migration nào: các bảng dùng lại (`workflow_process_draft`, `workflow_process_release`, `service_definition`, `service_operation_draft`, `service_publication`, `workflow_event_registry_draft`, `workflow_event_registry_release`) do migration cũ của Flow Engine tạo.
+- `admin-be-boot`: app Spring Boot, cổng `8081`.
 
-Theo spec, các module sau sẽ được thêm dần: `design-modeling`, `hub-admin`, `admin-be-migrations` (schema `flow_admin`).
+## Flow Admin BE nói chuyện với Flow Engine thế nào
+
+- **Xác thực người dùng:** Flow Admin BE không tự kiểm Keycloak. Mỗi request mang token của người dùng (Bearer hoặc cookie phiên do Flow Engine đặt) và `X-Tenant-Code`; Flow Admin BE hỏi `GET /api/admin/me` của Flow Engine và cache kết quả 60 giây. Role là `eim_roles`, như Flow Engine.
+- **Phát hành:** gọi Deployment API (`/api/deployment/**`) bằng service token của client `flow-admin-be` (seed ở V43 của Flow Engine), kèm `X-Acting-User`. Secret dùng chung: `FLOW_ADMIN_BE_SERVICE_SECRET`, đặt giống nhau ở cả hai app.
+- **Cấu hình môi trường của dịch vụ:** khi publish một dịch vụ trong catalog, base URL (theo `WORKFLOW_SERVICES_ENVIRONMENT`) và credential được ghi sang `work_service_environment` của Flow Engine qua `PUT /api/admin/service-environments/{key}`, bằng token của người dùng. Tạm thời, tới khi Hub có màn riêng (giai đoạn 3).
+- **Luật gán người:** vẫn sửa trên version đã deploy ở Flow Engine (`/workflow/node-assignment-rule`). Khi phát hành, Flow Admin BE yêu cầu Flow Engine chép luật từ version trước (`copyAssignmentsFromLatest`); khi rollback thì chép từ version được khôi phục.
+- Tắt Flow Admin BE thì Flow Engine vẫn chạy đủ: start, duyệt, callback, timer, event.
 
 ## Chạy
 
-Yêu cầu Java 25 và Maven 3.9.
+Yêu cầu Java 25 và Maven 3.9. Chạy Flow Engine trước (nó tạo các bảng và xác thực người dùng). Biến môi trường: xem `.env.example`.
 
 ```bash
 mvn -pl admin-be-boot -am spring-boot:run

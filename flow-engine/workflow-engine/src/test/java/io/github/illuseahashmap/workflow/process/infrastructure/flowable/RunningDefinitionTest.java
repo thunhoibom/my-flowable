@@ -3,16 +3,12 @@ package io.github.illuseahashmap.workflow.process.infrastructure.flowable;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
-import static org.mockito.Mockito.mock;
 
-import io.github.illuseahashmap.workflow.process.application.ProcessPublishService;
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessDefinitionSummaryView;
-import io.github.illuseahashmap.workflow.process.domain.ProcessDraft;
 import io.github.illuseahashmap.workflow.shared.context.TenantContext;
 import io.github.illuseahashmap.workflow.shared.context.TenantProvider;
 import io.github.illuseahashmap.workflow.shared.exception.BusinessException;
 import io.github.illuseahashmap.workflow.shared.exception.ErrorCode;
-import java.time.OffsetDateTime;
 import java.util.Set;
 import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.impl.cfg.StandaloneInMemProcessEngineConfiguration;
@@ -28,7 +24,6 @@ class RunningDefinitionTest {
     private static final TenantProvider TENANT_PROVIDER = () -> new TenantContext.TenantInfo(TENANT, "run", "Run");
 
     private static ProcessEngine engine;
-    private static InMemoryProcessRepositories.Drafts drafts;
     private static WorkflowDefinitionServiceImpl definitions;
     private static WorkflowTaskOperationSupport support;
     private static WorkflowDefinitionReadService reads;
@@ -40,15 +35,11 @@ class RunningDefinitionTest {
         configuration.setAsyncExecutorActivate(false);
         configuration.setCreateDiagramOnDeploy(false);
         engine = configuration.buildProcessEngine();
-        drafts = new InMemoryProcessRepositories.Drafts();
-        var releases = new InMemoryProcessRepositories.Releases();
         var lookup = new ProcessDefinitionLookup(engine.getRepositoryService());
-        definitions = new WorkflowDefinitionServiceImpl(engine.getRepositoryService(), TENANT_PROVIDER,
-                mock(ProcessPublishService.class), releases, drafts, lookup);
+        definitions = new WorkflowDefinitionServiceImpl(engine.getRepositoryService(), TENANT_PROVIDER, lookup);
         support = new WorkflowTaskOperationSupport(engine.getRuntimeService(), engine.getTaskService(),
                 engine.getRepositoryService(), definitions, null, null, TENANT_PROVIDER);
-        reads = new WorkflowDefinitionReadService(engine.getRepositoryService(), TENANT_PROVIDER,
-                drafts, releases, lookup);
+        reads = new WorkflowDefinitionReadService(engine.getRepositoryService(), TENANT_PROVIDER, lookup);
     }
 
     @AfterAll
@@ -56,9 +47,19 @@ class RunningDefinitionTest {
         engine.close();
     }
 
+    private static String xml(String key) {
+        return """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="t">
+                  <process id="%s" name="%s" isExecutable="true">
+                    <startEvent id="s"/><endEvent id="e"/><sequenceFlow id="f" sourceRef="s" targetRef="e"/>
+                  </process>
+                </definitions>""".formatted(key, key);
+    }
+
     private static ProcessDefinition deploy(String key) {
         var deployment = engine.getRepositoryService().createDeployment().tenantId(TENANT)
-                .addString(key + ".bpmn20.xml", ProcessDraftServiceImplTest.xml(key, key)).deploy();
+                .addString(key + ".bpmn20.xml", xml(key)).deploy();
         return engine.getRepositoryService().createProcessDefinitionQuery()
                 .deploymentId(deployment.getId()).singleResult();
     }
@@ -94,33 +95,27 @@ class RunningDefinitionTest {
 
         assertThat(definitions.list("r3")).extracting("version", "active")
                 .containsExactly(tuple(2, true), tuple(1, false));
-        assertThat(definitions.getActiveVersion("r3").version()).isEqualTo(2);
 
         engine.getRepositoryService().suspendProcessDefinitionById(v2.getId(), false, null);
         assertThat(definitions.list("r3").getFirst().active()).isFalse();
-        assertThatThrownBy(() -> definitions.getActiveVersion("r3"))
-                .isInstanceOfSatisfying(BusinessException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND));
     }
 
     @Test
-    void pageShowsDraftOnlyPublishedAndSuspendedKeys() {
+    void pageShowsPublishedAndSuspendedKeys() {
         deploy("r4");
         ProcessDefinition stopped = deploy("r5");
         engine.getRepositoryService().suspendProcessDefinitionById(stopped.getId(), false, null);
-        drafts.insert(ProcessDraft.of(TENANT, "r6", "Chỉ nháp", ProcessDraftServiceImplTest.xml("r6", "x"), 1,
-                "alice", OffsetDateTime.now()));
 
         var page = reads.page(1, 100, "r", null, "all").records().stream()
-                .filter(row -> Set.of("r4", "r5", "r6").contains(row.processDefinitionKey()))
+                .filter(row -> Set.of("r4", "r5").contains(row.processDefinitionKey()))
                 .toList();
 
         assertThat(page).extracting(ProcessDefinitionSummaryView::processDefinitionKey,
                         ProcessDefinitionSummaryView::publishStatus)
-                .containsExactlyInAnyOrder(tuple("r4", "published"), tuple("r5", "suspended"),
-                        tuple("r6", "draft_only"));
-        assertThat(reads.page(1, 100, "r6", null, "draft_only").records()).hasSize(1);
+                .containsExactlyInAnyOrder(tuple("r4", "published"), tuple("r5", "suspended"));
+        assertThat(reads.page(1, 100, "r5", null, "draft_only").records()).isEmpty();
         assertThat(reads.page(1, 100, "r5", null, "unpublished").records()).hasSize(1);
-        assertThat(definitions.exists("r6")).isTrue();
+        assertThat(definitions.exists("r4")).isTrue();
+        assertThat(definitions.exists("r6")).isFalse();
     }
 }

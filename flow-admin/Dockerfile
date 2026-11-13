@@ -10,6 +10,9 @@ RUN pnpm build
 
 FROM nginx:stable-alpine
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Backend URLs are read at container start (see nginx.conf.template); override per environment.
+ENV FLOW_ENGINE_URL=http://flow-engine:8080 \
+    FLOW_ADMIN_BE_URL=http://flow-admin-be:8081
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /workspace/dist /usr/share/nginx/html
 EXPOSE 80

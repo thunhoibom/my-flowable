@@ -12,8 +12,6 @@ import io.github.illuseahashmap.workflow.process.application.dto.ProcessInstance
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessReferenceView;
 import io.github.illuseahashmap.workflow.process.application.dto.TerminateProcessRequest;
 import io.github.illuseahashmap.workflow.process.application.port.CallReferenceRepository;
-import io.github.illuseahashmap.workflow.process.application.port.ProcessDraftRepository;
-import io.github.illuseahashmap.workflow.process.application.port.ProcessReleaseRepository;
 import io.github.illuseahashmap.workflow.process.infrastructure.lock.ProcessInstanceTransactionExecutor;
 import io.github.illuseahashmap.workflow.shared.context.TenantProvider;
 import io.github.illuseahashmap.workflow.shared.exception.BusinessException;
@@ -42,8 +40,6 @@ public class WorkflowAdministrationServiceImpl implements WorkflowAdministration
     private final TenantProvider tenantProvider;
     private final AssignmentRuleService assignmentRuleService;
     private final WorkflowOperationAuditService auditService;
-    private final ProcessDraftRepository drafts;
-    private final ProcessReleaseRepository releases;
     private final CallReferenceRepository callReferences;
     private final EventReferenceRepository eventReferences;
 
@@ -57,12 +53,8 @@ public class WorkflowAdministrationServiceImpl implements WorkflowAdministration
                                              TenantProvider tenantProvider,
                                              AssignmentRuleService assignmentRuleService,
                                              WorkflowOperationAuditService auditService,
-                                             ProcessDraftRepository drafts,
-                                             ProcessReleaseRepository releases,
                                              CallReferenceRepository callReferences,
                                              EventReferenceRepository eventReferences) {
-        this.drafts = drafts;
-        this.releases = releases;
         this.callReferences = callReferences;
         this.eventReferences = eventReferences;
         this.repositoryService = repositoryService;
@@ -175,14 +167,7 @@ public class WorkflowAdministrationServiceImpl implements WorkflowAdministration
                 .processDefinitionKey(processDefinitionKey)
                 .list();
         if (definitions.isEmpty()) {
-            if (drafts.find(tenantId, processDefinitionKey).isEmpty()) {
-                throw new BusinessException(ErrorCode.NOT_FOUND, "Process definition does not exist");
-            }
-            drafts.delete(tenantId, processDefinitionKey);
-            auditService.record(
-                    "PROCESS_DRAFT_DELETED", null, processDefinitionKey,
-                    null, processDefinitionKey, "DRAFT", "DELETED", null);
-            return;
+            throw new BusinessException(ErrorCode.NOT_FOUND, "Process definition does not exist");
         }
         long running = runtimeService.createProcessInstanceQuery()
                 .processInstanceTenantId(tenantId).processDefinitionKey(processDefinitionKey).count();
@@ -200,8 +185,6 @@ public class WorkflowAdministrationServiceImpl implements WorkflowAdministration
         eventReferences.deleteForProcessKey(tenantId, processDefinitionKey);
         definitions.stream().map(ProcessDefinition::getDeploymentId).distinct()
                 .forEach(deploymentId -> repositoryService.deleteDeployment(deploymentId, true));
-        drafts.delete(tenantId, processDefinitionKey);
-        releases.deleteByKey(tenantId, processDefinitionKey);
         callReferences.deleteForKey(tenantId, processDefinitionKey);
         // Legacy table, kept until it is dropped in a later migration.
         jdbcTemplate.update("""

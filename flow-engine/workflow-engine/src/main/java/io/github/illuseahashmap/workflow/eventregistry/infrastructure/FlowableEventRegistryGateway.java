@@ -3,6 +3,10 @@ package io.github.illuseahashmap.workflow.eventregistry.infrastructure;
 import io.github.illuseahashmap.workflow.eventregistry.application.port.EventRegistryGateway;
 import io.github.illuseahashmap.workflow.eventregistry.domain.EventField;
 import io.github.illuseahashmap.workflow.eventregistry.domain.RegistryModelType;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import org.flowable.engine.RuntimeService;
@@ -56,6 +60,37 @@ public class FlowableEventRegistryGateway implements EventRegistryGateway {
     public boolean channelDeployed(String tenantId, String key) {
         return eventRepositoryService.createChannelDefinitionQuery()
                 .channelDefinitionKey(key).tenantId(tenantId).count() > 0;
+    }
+
+    @Override
+    public Optional<Latest> latest(String tenantId, RegistryModelType type, String key) {
+        String deploymentId;
+        String resourceName;
+        int version;
+        if (type == RegistryModelType.EVENT) {
+            EventDefinition definition = eventRepositoryService.createEventDefinitionQuery()
+                    .eventDefinitionKey(key).tenantId(tenantId).latestVersion().singleResult();
+            if (definition == null) {
+                return Optional.empty();
+            }
+            deploymentId = definition.getDeploymentId();
+            resourceName = definition.getResourceName();
+            version = definition.getVersion();
+        } else {
+            ChannelDefinition definition = eventRepositoryService.createChannelDefinitionQuery()
+                    .channelDefinitionKey(key).tenantId(tenantId).latestVersion().singleResult();
+            if (definition == null) {
+                return Optional.empty();
+            }
+            deploymentId = definition.getDeploymentId();
+            resourceName = definition.getResourceName();
+            version = definition.getVersion();
+        }
+        try (InputStream content = eventRepositoryService.getResourceAsStream(deploymentId, resourceName)) {
+            return Optional.of(new Latest(new String(content.readAllBytes(), StandardCharsets.UTF_8), version));
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
     }
 
     @Override

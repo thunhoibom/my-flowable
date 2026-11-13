@@ -29,9 +29,9 @@ Spec này chốt ranh giới, API giữa các repo và lộ trình. Mỗi giai �
 | STT | Thành phần (bảng thiết kế) | Mô tả trong bảng | Ở đây | Số lượng deploy tối thiểu |
 |---|---|---|---|---|
 | 1 | Flow Admin | Giao diện quản trị, ReactJS | `flow-admin`: SPA khu vực Design, Hub, Work. Hiện dùng **Vue**, xem mục Rủi ro | 2 |
-| 2 | Flow Admin BE | API quản trị cho giao diện, tương tác trực tiếp với CSDL, Java | `flow-admin-be`: Java, chỉ đọc và ghi schema `flow_admin` của mình; dữ liệu runtime lấy qua Admin API của Flow Engine | 2 |
+| 2 | Flow Admin BE | API quản trị cho giao diện, tương tác trực tiếp với CSDL, Java | `flow-admin-be`: Java, chỉ đọc và ghi các bảng thuộc về mình; dữ liệu runtime lấy qua Admin API của Flow Engine | 2 |
 | 3 | Flow Engine | Core xử lý flow nghiệp vụ theo cấu hình từ Flow Admin, dùng core Flowable | `flow-engine`: Flowable 8.0.0, nhận cấu hình qua Deployment API (JSON) từ Flow Admin BE | 2 |
-| 4 | Postgres | CSDL cho Flow Admin và Flow Engine, Master-Slave | Dùng chung DB `workflow_agent`, mỗi bên một schema. Replication Master-Slave do hạ tầng lo, xem mục Triển khai | 2 |
+| 4 | Postgres | CSDL cho Flow Admin và Flow Engine, Master-Slave | Dùng chung DB `workflow_agent` và một schema `public`; mỗi bên sở hữu một nhóm bảng. Replication Master-Slave do hạ tầng lo, xem mục Triển khai | 2 |
 
 Ngoài bảng, hệ thống còn dùng Redis (session của Flow Engine) và Keycloak/EIM (đăng nhập, role), coi là hạ tầng dùng chung.
 
@@ -45,7 +45,7 @@ Nguồn: [Full platform install](https://documentation.flowable.com/latest/admin
 | Design publish App lên Work qua REST (`flowable.design.deployment-api-url`) | Giữ nguyên ý tưởng: Flow Admin BE gửi một request JSON (BPMN, dịch vụ, luật gán) qua REST tới Flow Engine |
 | Có thể khai báo nhiều đích deploy (`flowable.design.deployment.<id>.*`) và bắt duyệt trước khi publish (`publish-request-required`) | Giữ nguyên, làm ở giai đoạn 5 |
 | Hub gọi REST API của Work, không đọc DB của Work; mỗi Work là một "cluster" khai báo trong Hub | Giữ nguyên |
-| Design/Hub có thể dùng chung DB với Work hoặc DB riêng | **Dùng chung DB `workflow_agent`**, mỗi bên một schema riêng |
+| Design/Hub có thể dùng chung DB với Work hoặc DB riêng | **Dùng chung DB `workflow_agent` và schema `public`**, mỗi bên sở hữu bảng riêng |
 | Mỗi app một user store, cùng nối vào một IdP qua OAuth2 | Cùng dùng Keycloak/EIM. Mỗi app tự kiểm quyền của mình |
 | Work cần Elasticsearch, trừ trường hợp xử lý thẳng, tải nhẹ (`flowable.indexing.enabled=false`) | Chưa dùng ES |
 | Khuyến nghị cả 3 app chạy cùng phiên bản | Không ép. Deployment API chỉ được thêm trường, không xoá hay đổi nghĩa trường cũ |
@@ -85,9 +85,9 @@ Nguồn: [Full platform install](https://documentation.flowable.com/latest/admin
  │  outbox, agent runtime, auth/tenant/RLS                          │
  └───────┬──────────────────────────────────────────────────────────┘
                             │
-       ┌────────────────────┴──── Postgres: DB workflow_agent ─────────────────────┐
-       │  schema public     ← Flow Engine   (ACT_*, runtime, auth, outbox, ...)    │
-       │  schema flow_admin ← Flow Admin BE (bản nháp, catalog, lịch sử, cluster)  │
+       ┌────────────────────┴──── Postgres: DB workflow_agent, schema public ──────┐
+       │  bảng của Flow Engine   (ACT_*, flw_se_*, runtime, auth, outbox, ...)    │
+       │  bảng của Flow Admin BE (bản nháp, catalog, lịch sử phát hành, cluster)  │
        └────────────────────────────────────────────────────────────────────────────┘
                             Redis ← Flow Engine (thêm Flow Admin BE khi chạy nhiều node)
                             Keycloak/EIM ← cả hai backend
@@ -97,7 +97,7 @@ Nguồn: [Full platform install](https://documentation.flowable.com/latest/admin
 
 1. **Một chiều.** Chỉ Flow Admin BE gọi sang Flow Engine. Flow Engine không bao giờ gọi ngược lại. Tắt Flow Admin BE thì Flow Engine vẫn chạy đủ: start, duyệt, callback, timer, event.
 2. **Flow Engine tự đủ.** Mọi thứ một instance cần để chạy (BPMN, định nghĩa dịch vụ, luật gán người) đi vào Flow Engine qua một lần deploy và được gắn với deploy đó. Event/channel dùng chung đi vào Flow Engine qua một lần deploy event riêng. Runtime không tra cứu bản "mới nhất" của một định nghĩa do Design quản lý.
-3. **Không đọc chéo dữ liệu.** Tuy dùng chung DB, mỗi app chỉ đọc và ghi schema của mình. Postgres ép việc này qua phân quyền user (xem mục Dữ liệu).
+3. **Không đọc chéo dữ liệu.** Tuy dùng chung DB và schema, mỗi app chỉ đọc và ghi các bảng thuộc về mình (xem mục Dữ liệu). Cần dữ liệu của bên kia thì gọi API.
 4. **Không có bí mật trong request deploy.** URL theo môi trường, credential và secret không nằm trong request deploy hay sơ đồ. Chúng ở Flow Engine, theo từng môi trường, và được sửa qua Hub.
 5. **Flow Engine là bên kiểm cuối cùng.** Design kiểm trước để báo lỗi sớm cho người thiết kế. Flow Engine vẫn kiểm lại khi nhận deploy và có quyền từ chối.
 
@@ -169,7 +169,7 @@ flow-admin-be/
   design-modeling/        bản nháp quy trình, catalog nháp, event nháp, luật gán nháp,
                             lịch sử phát hành, client gọi Deployment API
   hub-admin/              danh sách cluster, BFF gọi Admin API của Flow Engine
-  admin-be-migrations/    schema flow_admin
+  admin-be-migrations/    migration cho các bảng của Flow Admin BE (schema public)
   admin-be-boot/
 ```
 
@@ -177,35 +177,38 @@ Hai repo build riêng, không có dependency Maven sang nhau, nên không thể 
 
 ## Dữ liệu
 
-### Schema và user
+### Một schema, chia bảng theo chủ sở hữu
+
+Cả hai backend dùng chung DB `workflow_agent` và một schema `public`. Không tạo schema mới, không tách user DB. Flow Admin BE **dùng lại các bảng soạn thảo đang có, giữ nguyên tên và dữ liệu**.
 
 | | Flow Engine | Flow Admin BE |
 |---|---|---|
-| Schema | `public` (giữ nguyên) | `flow_admin` (mới) |
-| User DB | `flow_engine`: toàn quyền trên `public`, không có quyền gì trên `flow_admin` | `flow_admin_be`: toàn quyền trên `flow_admin`, không có quyền gì trên `public` |
-| Flyway | `public.flyway_schema_history`, V1–V40 và tiếp tục đánh số | `flow_admin.flyway_schema_history`, đánh số lại từ V1 |
-| RLS theo tenant | Giữ như V16 | Áp dụng cùng cơ chế cho mọi bảng có `tenant_id` |
+| Schema | `public` | `public` |
+| Flyway | `flyway_schema_history`, V1–V41 và tiếp tục đánh số | Bảng lịch sử riêng `flyway_schema_history_admin_be`, đánh số từ V1, `baseline-on-migrate` vì các bảng đã có sẵn |
+| RLS theo tenant | Giữ như V16 | Giữ như hiện tại trên các bảng đang dùng; bảng mới có `tenant_id` áp dụng cùng cơ chế |
 
-Trên môi trường local và compose có thể dùng một superuser cho tiện, nhưng test tích hợp phải chạy với hai user tách quyền để chứng minh nguyên tắc 3.
+Các bảng soạn thảo hiện có đã được tạo bởi migration V1–V41 của Flow Engine, nên DB mới vẫn đủ bảng khi chỉ chạy Flow Engine. Từ giai đoạn 2, mọi thay đổi trên bảng của Flow Admin BE nằm ở `admin-be-migrations`. Flow Engine không thêm migration nào chạm vào các bảng đó.
+
+Nguyên tắc 3 được giữ bằng quy ước và review: code của mỗi backend chỉ được chứa câu lệnh SQL/entity trên bảng thuộc về mình theo bảng dưới.
 
 ### Bảng nào thuộc bên nào
 
-| Bảng hiện có | Về đâu | Ghi chú |
+| Bảng hiện có | Thuộc | Ghi chú |
 |---|---|---|
-| `workflow_process_draft` | flow_admin | Tạo bảng mới ở flow_admin, không chuyển dữ liệu (xem dưới) |
-| `workflow_process_release` | Tách hai | Lịch sử phát hành phía Design ở flow_admin. Phía Flow Engine dùng luôn `ACT_RE_DEPLOYMENT` của Flowable |
-| `service_definition`, `service_operation_draft` | flow_admin | Bỏ các cột secret và URL theo môi trường, xem mục Cấu hình môi trường |
+| `workflow_process_draft` | Flow Admin BE | Dùng lại nguyên bảng |
+| `workflow_process_release` | Flow Admin BE | Lịch sử phát hành phía Design. Phía Flow Engine dùng `ACT_RE_DEPLOYMENT` của Flowable |
+| `service_definition`, `service_operation_draft` | Flow Admin BE | Các cột secret và URL theo môi trường thôi dùng (chuyển sang `work_service_environment` của Flow Engine), xoá bằng migration của Flow Admin BE ở bản phát hành sau |
 | `service_publication` | Thay thế | Flow Engine dùng các bảng `flw_se_*`, gắn theo deploy. Bỏ dần bảng cũ |
-| `workflow_event_registry_draft` | flow_admin | |
-| `workflow_event_registry_release` | Tách hai | Giống `workflow_process_release` |
-| `workflow_node_assignment_rule*`, `workflow_assignment_target` | public | Flow Engine giữ phần gắn theo definition id, chỉ ghi khi nhận deploy, không có API sửa. Design có bảng nháp riêng |
-| `workflow_call_reference`, `workflow_event_reference` | public | Flow Engine tính ra khi nhận deploy |
-| `workflow_active_version` | public | Di sản từ trước bản draft/publish. Xử lý theo spec draft-publish |
-| `ACT_*`, `agent_*`, `auth_*`, `platform_*`, `service_callback_wait`, `workflow_service_*`, `workflow_tenant`, `workflow_operation_audit`, `workflow_assignment_fallback_command` | public | |
+| `workflow_event_registry_draft` | Flow Admin BE | Dùng lại nguyên bảng |
+| `workflow_event_registry_release` | Flow Admin BE | Lịch sử phát hành event. Phía Flow Engine dùng `FLW_EVENT_DEPLOYMENT` của Flowable |
+| `workflow_node_assignment_rule*`, `workflow_assignment_target` | Flow Engine | Gắn theo definition id, chỉ ghi khi nhận deploy, không có API sửa. Luật gán nháp của Design lưu ở phía Flow Admin BE, chốt ở spec giai đoạn 2 |
+| `workflow_call_reference`, `workflow_event_reference` | Flow Engine | Tính ra khi nhận deploy |
+| `workflow_active_version` | Flow Engine | Di sản từ trước bản draft/publish. Xử lý theo spec draft-publish |
+| `ACT_*`, `FLW_EVENT_*`, `agent_*`, `auth_*`, `platform_*`, `service_callback_wait`, `workflow_service_*`, `workflow_tenant`, `workflow_operation_audit`, `workflow_assignment_fallback_command` | Flow Engine | |
 
-Bảng mới ở flow_admin: lịch sử phát hành lưu nguyên JSON đã gửi, dùng cho rollback và mở lại vào bản nháp. `work_cluster` lưu danh sách Flow Engine, URL và cách xác thực.
+Bảng mới của Flow Admin BE: `work_cluster` lưu danh sách Flow Engine, URL và cách xác thực. Lịch sử phát hành cần thêm cột lưu nguyên JSON đã gửi (dùng cho rollback và mở lại vào bản nháp) và trạng thái PENDING/DEPLOYED/FAILED; thêm vào bảng `*_release` hiện có.
 
-Bảng mới ở public:
+Bảng mới của Flow Engine:
 
 - `flw_se_deployment`, `flw_se_deployment_resource`, `flw_se_definition`: service engine chép theo `FLW_SE_*` của Flowable Enterprise, xem mục Service engine.
 - `work_service_environment`: base URL và credential theo dịch vụ, xem mục Cấu hình môi trường.
@@ -228,11 +231,11 @@ Kiểu cột, `tenant_id_` mặc định `''`, khoá ngoại và index theo `FLW
 
 **Tra định nghĩa lúc chạy.** Giống `GetEventModelCmd` của Flowable: service task lấy deployment cha của process definition (`ProcessDefinitionUtil.getDefinitionDeploymentId`), tìm `flw_se_definition` theo `key_` trong deployment con của cha đó. Không thấy thì lấy bản mới nhất theo `(key, tenant)`, rồi tới tenant mặc định nếu bật. Service task có `sameDeployment="false"` thì luôn lấy bản mới nhất, giống task DMN. Model được cache theo definition id (`workflow.service-registry.definition-cache-limit`, mặc định 200).
 
-**Ghép với môi trường.** Lúc gọi, phần thiết kế lấy từ `flw_se_definition`, còn base URL và credential lấy từ cấu hình hiện tại của dịch vụ. Tạm thời đó là bản publish mới nhất trong catalog; sau này là `work_service_environment`.
+**Ghép với môi trường.** Lúc gọi, phần thiết kế lấy từ `flw_se_definition`, còn base URL và credential lấy từ `work_service_environment` của Flow Engine (V42, đã làm). Tạm thời, dịch vụ chưa có dòng trong bảng này thì lấy cấu hình của bản publish mới nhất trong catalog; nguồn tạm này bỏ ở giai đoạn 2, cùng lúc catalog chuyển sang Flow Admin BE.
 
 Nhờ vậy instance luôn gọi dịch vụ đúng như lúc version quy trình của nó được deploy. Publish lại dịch vụ chỉ có hiệu lực cho lần phát hành quy trình sau.
 
-**Không migrate dữ liệu** (người dùng chốt 2026-11-13). admin-be-migrations tạo schema `flow_admin` với bảng rỗng. Bản nháp, catalog, event và luật gán được soạn lại rồi publish lại từ đầu. Các bảng soạn thảo cũ ở `public` không còn ai dùng sau giai đoạn 2, và được Flow Engine xoá bằng một migration ở bản phát hành sau đó.
+**Không migrate dữ liệu runtime** (người dùng chốt 2026-11-13). Không tạo định nghĩa dịch vụ "di sản" cho instance và deploy cũ. Dữ liệu soạn thảo (bản nháp, catalog, event) thì vẫn còn nguyên vì Flow Admin BE dùng lại bảng cũ; chỉ cần publish lại qua Deployment API để Flow Engine có `flw_se_*` và luật gán theo version mới.
 
 ## Deployment API
 
@@ -269,7 +272,7 @@ Không có định dạng package, manifest hay artifact dùng chung. Flow Admin
 - **Tham chiếu phải có sẵn.** Quy trình tham chiếu event hay quy trình con chưa được deploy thì bị từ chối kèm danh sách key còn thiếu. Vì vậy phải publish event trước quy trình dùng nó.
 - **Chỉ thêm, không phá.** Muốn đổi API thì chỉ thêm trường mới (có giá trị mặc định); không xoá hay đổi nghĩa trường cũ.
 - **Event: bản sau thắng, giống Flowable.** Publish event cùng key với nội dung khác thì tạo version mới, và mọi quy trình dùng key đó đều theo version mới. Trước khi gửi, Design hiện danh sách quy trình đang tham chiếu key này để người publish biết. Muốn đổi theo kiểu không tương thích thì nên tạo key mới.
-- **Event trùng nội dung không deploy lại.** Event/channel có hash giống bản đang chạy thì bỏ qua, để không tăng version event một cách vô ích.
+- **Event trùng nội dung không deploy lại.** Event/channel có hash giống bản đang chạy thì bỏ qua, để không tăng version event một cách vô ích. Vì vậy `/api/deployment/events` gửi lại bao nhiêu lần cũng không tạo version mới; `publishId` của event chỉ dùng để ghi audit.
 - **Luật gán người cố định theo version.** Luật đi cùng request deploy và gắn với definition id. Sau khi deploy không sửa được. Muốn đổi thì publish version mới. Thay người phụ trách thì đổi thành viên role/nhóm. Xử lý gấp một task cụ thể thì admin giao lại task đó qua Hub. Đây đúng là cách Flowable làm.
 - **Dịch vụ phải có cấu hình môi trường.** Mọi dịch vụ trong request phải đã có `work_service_environment` ở Flow Engine đó. Thiếu thì từ chối và trả danh sách dịch vụ còn thiếu, để người dùng sang Hub cấu hình rồi publish lại.
 
@@ -302,7 +305,7 @@ Các thao tác đã có trong spec draft-publish (`2026-11-05-draft-publish-desi
 | Ngừng / Phát hành lại | Gọi engine trực tiếp | `POST /api/deployment/processes/{key}/suspend` hoặc `.../resume` |
 | Quay về vK | Deploy lại XML của vK | Gửi lại JSON đã lưu của vK với `publishId` mới. Flow Engine tạo vN+1 |
 | Xoá version | Gọi engine trực tiếp | `DELETE /api/deployment/processes/{key}/versions/{v}`. Flow Engine giữ các điều kiện chặn như cũ |
-| Mở vK vào bản nháp, huỷ thay đổi | Đọc từ engine | Đọc từ lịch sử phát hành ở flow_admin, không cần gọi Flow Engine |
+| Mở vK vào bản nháp, huỷ thay đổi | Đọc từ engine | Đọc từ lịch sử phát hành (`workflow_process_release`) của Flow Admin BE, không cần gọi Flow Engine |
 | "Có thay đổi chưa phát hành" | So hash nháp với latest | So hash nháp với lần phát hành gần nhất đã DEPLOYED lên đích đang chọn |
 
 ## Cấu hình môi trường ở Flow Engine
@@ -311,9 +314,9 @@ Phần này bám nguyên tắc "URL, xác thực và bí mật không nằm trê
 
 - `work_service_environment(tenant_id, service_key, base_url, auth_config, secret_cipher, updated_by, updated_at)`. Bảng này nằm ở Flow Engine, secret được mã hoá bằng master key của Flow Engine.
 - Lúc chạy, Flow Engine ghép định nghĩa dịch vụ (`flw_se_definition` theo deployment cha) với cấu hình môi trường hiện tại để có request hoàn chỉnh. Đổi URL hay secret có hiệu lực ngay, không cần publish lại. Đây là hành vi mong muốn, vì việc xoay secret là việc vận hành.
-- Hub sửa bảng này qua Admin API. Design không bao giờ thấy secret.
+- Hub sửa bảng này qua Admin API. Design không bao giờ thấy secret. Admin API đã có từ giai đoạn 1: `GET/PUT/DELETE /api/admin/service-environments/{serviceKey}` (role `WF_PLATFORM_ADMIN`, `WF_ADMIN`). Response không chứa secret, chỉ báo secret nào đang được lưu; lưu với secret để trống thì giữ giá trị cũ.
 - Channel event có giá trị phụ thuộc môi trường cũng dùng cùng cơ chế.
-- Hiện nay `service_operation_draft` đang giữ secret. Vì không migrate dữ liệu, giá trị cấu hình môi trường được nhập mới vào `work_service_environment` (qua Admin API, sau này qua Hub). Bảng nháp mới ở flow_admin không có cột secret.
+- Hiện nay `service_operation_draft` đang giữ secret. Vì không migrate dữ liệu, giá trị cấu hình môi trường được nhập mới vào `work_service_environment` (qua Admin API, sau này qua Hub). Flow Admin BE thôi dùng các cột secret của `service_operation_draft` và xoá chúng ở bản phát hành sau.
 
 ## API của Flow Engine
 
@@ -404,10 +407,14 @@ Thứ tự này nhằm **làm phía Flow Engine trước rồi đóng băng**. S
 - `flow-admin` = toàn bộ frontend hiện tại.
 - `flow-admin-be` = khung gồm `shared-kernel` và `admin-be-boot`.
 
+**Giai đoạn 1 (đã làm, 2026-11-13):** chi tiết ở `flow-engine/docs/superpowers/plans/2026-11-13-deployment-api.md`. Khác với bảng dưới ở hai điểm (người dùng chốt): endpoint sửa luật gán người `/workflow/node-assignment-rule` **được giữ** (đánh dấu deprecated), vì không làm luật gán nháp; và runtime tạm fallback về catalog khi dịch vụ chưa có `work_service_environment` (fallback này đã bỏ ở giai đoạn 2).
+
+**Giai đoạn 2 (đã làm, 2026-11-13):** chi tiết ở `flow-admin-be/docs/superpowers/plans/2026-11-13-phase2-design-move.md`. Người dùng chốt: Flow Admin BE xác thực bằng cách hỏi Flow Engine (`GET /api/admin/me`, cache 60 giây) thay vì tự kiểm JWT; không làm luật gán người nháp, phát hành yêu cầu Flow Engine chép luật từ version trước (`copyAssignmentsFromLatest` / `copyAssignmentsFromVersion`, trường thêm vào Deployment API). Lịch sử phát hành không lưu JSON đã gửi; rollback đọc nội dung version từ Flow Engine. Base URL và secret của dịch vụ vẫn nhập ở catalog, được ghi sang `work_service_environment` khi publish dịch vụ, tới khi Hub có màn riêng.
+
 | Giai đoạn | Nội dung | Xong khi |
 |---|---|---|
 | 1. Phía nhận deploy của Flow Engine | Trong `flow-engine`: service engine `flw_se_deployment`, `flw_se_deployment_resource`, `flw_se_definition`; `work_service_environment`; `/api/deployment/processes` và `/api/deployment/events` (JSON); runtime tra định nghĩa dịch vụ theo deployment cha thay vì `catalog.publishedService(key)`; deploy event tách khỏi deploy quy trình; luật gán người chỉ ghi khi nhận deploy (bỏ các endpoint sửa luật ở `/workflow/node-assignment-rule`). Nút Phát hành gọi cùng service đó (gọi nội bộ) | Phát hành lại một dịch vụ không làm đổi hành vi của instance đang chạy. Publish một quy trình không đổi được event. Có test chứng minh |
-| 2. Chuyển code soạn thảo sang Flow Admin BE | Chuyển code bản nháp, catalog nháp, event nháp, luật gán nháp từ `flow-engine` sang `flow-admin-be`; tạo schema `flow_admin` (bảng rỗng, không chuyển dữ liệu) cùng user DB riêng; nút Phát hành gọi REST. Trong `flow-admin`: tách hai API client, `/api/admin-be` và `/api/engine` | Hai backend chạy riêng. Tắt Flow Admin BE thì Flow Engine vẫn đi đủ luồng; test tích hợp chạy với hai user DB tách quyền |
+| 2. Chuyển code soạn thảo sang Flow Admin BE | Chuyển code bản nháp, catalog nháp, event nháp, luật gán nháp từ `flow-engine` sang `flow-admin-be`; Flow Admin BE dùng lại các bảng soạn thảo cũ trong schema `public` (giữ tên và dữ liệu), có bảng lịch sử Flyway riêng; nút Phát hành gọi REST. Trong `flow-admin`: tách hai API client, `/api/admin-be` và `/api/engine` | Hai backend chạy riêng. Tắt Flow Admin BE thì Flow Engine vẫn đi đủ luồng |
 | 3. Admin API và Hub | `/api/admin/**`; `work_cluster`; khu vực Hub trong `flow-admin` (gọi qua BFF của Flow Admin BE): instance, giao lại task, job lỗi, deploy, cấu hình môi trường, tenant/access | Không còn màn vận hành nào gọi thẳng `/workflow/management/**`. **Đóng băng Flow Engine** |
 | 4. Chia khu vực frontend | Sắp xếp lại `src/` thành `areas/{design,hub,work}` và `shared/`; luật ranh giới trong `architecture.spec.ts`; khu vực Work có hộp việc; bỏ các endpoint cũ | Ba khu vực không import lẫn nhau; khu vực Work chỉ gọi Runtime API |
 | 5. Hoàn thiện phát hành | Nhiều đích Flow Engine; bắt duyệt trước khi publish; quyền theo đích trong Design | Publish lên prod buộc phải qua duyệt |
@@ -418,10 +425,11 @@ Ba điểm đầu theo cách Flowable Enterprise đang làm, đã đối chiếu
 
 1. **Luật gán người đi cùng request deploy, cố định theo version.** Bỏ tính năng sửa luật của version đã deploy. Thay người thì đổi thành viên role/nhóm. Xử lý gấp thì giao lại từng task qua Hub.
 2. **Event/channel publish riêng (`/api/deployment/events`).** Deploy quy trình chỉ tham chiếu event key. Publish event cùng key thì bản sau thắng, kèm cảnh báo ở Design về các quy trình đang dùng.
-3. **Không migrate dữ liệu.** Không tạo định nghĩa dịch vụ "di sản" cho instance cũ, không chuyển dữ liệu soạn thảo sang `flow_admin`. Hệ thống mới bắt đầu với dữ liệu rỗng, rồi soạn và publish lại. Instance và deploy cũ trên môi trường hiện tại không được hỗ trợ sau khi lên giai đoạn 1.
-4. **Đặt tên theo bảng thành phần.** Repo, artifact Maven, image, tên app Spring, schema, user DB và tiền tố API dùng tên Flow Admin, Flow Admin BE, Flow Engine. Java package giữ nguyên. Tên bảng: bảng chép theo Flowable dùng tên Flowable (`flw_se_*`), bảng riêng dùng tiền tố `work_`.
+3. **Không migrate dữ liệu runtime.** Không tạo định nghĩa dịch vụ "di sản" cho instance cũ. Instance và deploy cũ trên môi trường hiện tại không được hỗ trợ sau khi lên giai đoạn 1. Dữ liệu soạn thảo giữ nguyên vì Flow Admin BE dùng lại bảng cũ, chỉ cần publish lại.
+4. **Đặt tên theo bảng thành phần.** Repo, artifact Maven, image, tên app Spring và tiền tố API dùng tên Flow Admin, Flow Admin BE, Flow Engine. Java package giữ nguyên. Tên bảng: bảng chép theo Flowable dùng tên Flowable (`flw_se_*`), bảng mới không có bản tương ứng trong Flowable dùng tiền tố `work_`. Bảng đang có giữ nguyên tên.
 5. **Khu vực Work nằm trong Flow Admin.** Bảng thành phần không có giao diện cho người dùng cuối. Hộp việc, start, duyệt vẫn là một khu vực của Flow Admin.
 6. **Không có hợp đồng package (người dùng chốt 2026-11-13, "làm đơn giản").** Bỏ zip, manifest, hash, `contractVersion`, `fixtures/`, artifact `app-contract` và bảng `work_app_deployment` (dùng `ACT_RE_DEPLOYMENT` của Flowable). Hai backend chỉ nói chuyện qua REST/JSON, mỗi bên tự giữ DTO.
+7. **Một schema `public`, dùng lại tên bảng cũ (người dùng chốt 2026-11-13).** Không tạo schema `flow_admin`, không tách user DB. Flow Admin BE dùng lại các bảng soạn thảo đang có; mỗi bảng thuộc về đúng một backend theo mục Dữ liệu.
 
 ## Rủi ro và việc cần kiểm
 

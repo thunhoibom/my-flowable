@@ -5,11 +5,10 @@ import io.github.illuseahashmap.serviceregistry.domain.AuthInheritance;
 import io.github.illuseahashmap.serviceregistry.domain.AuthMode;
 import io.github.illuseahashmap.serviceregistry.domain.AuthType;
 import io.github.illuseahashmap.serviceregistry.domain.CallOutcome;
-import io.github.illuseahashmap.serviceregistry.domain.EnvironmentBaseUrl;
 import io.github.illuseahashmap.serviceregistry.domain.PublishedOperation;
 import io.github.illuseahashmap.serviceregistry.domain.PublishedService;
 import io.github.illuseahashmap.serviceregistry.domain.ServiceCaller;
-import io.github.illuseahashmap.serviceregistry.domain.ServiceCatalog;
+import io.github.illuseahashmap.serviceregistry.domain.ServiceSettings;
 import io.github.illuseahashmap.serviceregistry.engine.ServiceDefinitionNotFoundException;
 import io.github.illuseahashmap.serviceregistry.engine.ServiceRepositoryService;
 import java.util.Map;
@@ -18,23 +17,22 @@ import java.util.Optional;
 /**
  * Calls a service the way the running process was deployed with it. The design (operations, parameters, body,
  * error rules, steps) comes from the service engine, in the parent deployment of the process. Base URLs and
- * credentials are environment settings and come from the current published configuration of the service.
+ * credentials are environment settings and come from the current configuration of the service on this
+ * Flow Engine ({@link ServiceSettingsSource}), so changing them takes effect on the next call.
  */
 public final class PublishedServiceInvoker {
 
     private static final AuthConfig NO_AUTH = new AuthConfig(AuthType.NONE, null, null);
 
     private final ServiceRepositoryService repository;
-    private final ServiceCatalog environmentSettings;
+    private final ServiceSettingsSource settingsSource;
     private final ServiceCaller caller;
-    private final ServiceEnvironment environment;
 
-    public PublishedServiceInvoker(ServiceRepositoryService repository, ServiceCatalog environmentSettings,
-                                   ServiceCaller caller, ServiceEnvironment environment) {
+    public PublishedServiceInvoker(ServiceRepositoryService repository, ServiceSettingsSource settingsSource,
+                                   ServiceCaller caller) {
         this.repository = repository;
-        this.environmentSettings = environmentSettings;
+        this.settingsSource = settingsSource;
         this.caller = caller;
-        this.environment = environment;
     }
 
     /** The operation with its credentials resolved, so a bearer variable name is visible before the call. */
@@ -42,7 +40,7 @@ public final class PublishedServiceInvoker {
                                                       String serviceKey, String operationKey) {
         return definition(tenantId, parentDeploymentId, serviceKey)
                 .flatMap(definition -> operation(definition, operationKey)
-                        .map(operation -> withCredentials(operation, settings(serviceKey))));
+                        .map(operation -> withCredentials(operation, settingsSource.find(tenantId, serviceKey))));
     }
 
     public Map<String, Object> invoke(String tenantId, String parentDeploymentId, String serviceKey,
@@ -51,7 +49,7 @@ public final class PublishedServiceInvoker {
                 .orElseThrow(() -> new ServiceCallException("SERVICE_NOT_PUBLISHED"));
         PublishedOperation operation = operation(definition, operationKey)
                 .orElseThrow(() -> new ServiceCallException("SERVICE_NOT_PUBLISHED"));
-        Optional<PublishedService> settings = settings(serviceKey);
+        Optional<ServiceSettings> settings = settingsSource.find(tenantId, serviceKey);
         // RequestFactory does not know about the service, so the resolved credentials go on the operation.
         PublishedOperation effective = withCredentials(operation, settings);
         CallOutcome outcome = caller.call(effective, resolvedInputs == null ? Map.of() : resolvedInputs,
@@ -71,10 +69,6 @@ public final class PublishedServiceInvoker {
         }
     }
 
-    private Optional<PublishedService> settings(String serviceKey) {
-        return environmentSettings.publishedService(serviceKey);
-    }
-
     private static Optional<PublishedOperation> operation(PublishedService service, String operationKey) {
         return service.operations().stream()
                 .filter(operation -> operation.operationKey().equals(operationKey))
@@ -83,29 +77,24 @@ public final class PublishedServiceInvoker {
 
     /**
      * Credentials of the current configuration. The deployed auth mode decides between the shared and the
-     * operation credentials when the operation no longer exists in the current configuration.
+     * operation credentials when the configuration does not set a mode for the operation.
      */
-    private static PublishedOperation withCredentials(PublishedOperation operation, Optional<PublishedService> settings) {
-        AuthConfig shared = settings.map(PublishedService::sharedAuth).orElse(NO_AUTH);
-        Optional<PublishedOperation> configured = settings.flatMap(service -> operation(service, operation.operationKey()));
-        AuthMode mode = configured.map(PublishedOperation::authMode).orElse(operation.authMode());
-        AuthConfig own = configured
-                .map(current -> new AuthConfig(current.authType(), current.apiKeyHeader(), current.secret(),
-                        current.apiKeyLocation(), current.authDetails()))
-                .orElse(NO_AUTH);
+    private static PublishedOperation withCredentials(PublishedOperation operation,
+                                                      Optional<ServiceSettings> settings) {
+        AuthConfig shared = settings.map(ServiceSettings::sharedAuth).orElse(NO_AUTH);
+        Optional<ServiceSettings.OperationAuth> configured =
+                settings.map(current -> current.operations().get(operation.operationKey()));
+        AuthMode mode = configured.map(ServiceSettings.OperationAuth::mode).orElse(operation.authMode());
+        AuthConfig own = configured.map(ServiceSettings.OperationAuth::auth).orElse(NO_AUTH);
         return operation.withCredentials(AuthMode.OVERRIDE, AuthInheritance.resolve(mode, shared, own));
     }
 
-    private String baseUrl(PublishedOperation operation, Optional<PublishedService> settings) {
+    private static String baseUrl(PublishedOperation operation, Optional<ServiceSettings> settings) {
         if (isAbsolute(operation.urlTemplate())) {
             return null;
         }
-        return settings.stream()
-                .flatMap(service -> service.baseUrls().stream())
-                .filter(item -> environment.name().equals(item.environment()))
-                .map(EnvironmentBaseUrl::url)
-                .filter(url -> url != null && !url.isBlank())
-                .findFirst()
+        return settings.map(ServiceSettings::baseUrl)
+                .filter(url -> !url.isBlank())
                 .orElseThrow(() -> new ServiceCallException("SERVICE_NOT_PUBLISHED"));
     }
 

@@ -1,17 +1,12 @@
 package io.github.illuseahashmap.workflow.eventregistry.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 import io.github.illuseahashmap.workflow.config.EventRegistryProperties;
 import io.github.illuseahashmap.workflow.eventregistry.application.dto.InboundEventResult;
-import io.github.illuseahashmap.workflow.eventregistry.application.dto.SaveEventModelRequest;
-import io.github.illuseahashmap.workflow.eventregistry.application.dto.SaveRestChannelRequest;
-import io.github.illuseahashmap.workflow.process.application.WorkflowOperationAuditService;
 import io.github.illuseahashmap.workflow.shared.context.CurrentPrincipal;
 import io.github.illuseahashmap.workflow.shared.context.TenantContext;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -40,20 +35,11 @@ class EventWaitRuntimeTest {
         test = new EventRegistryTestEngine("event-wait-runtime");
         var properties = new EventRegistryProperties();
         properties.setEnabled(true);
-        AtomicReference<TenantContext.TenantInfo> tenant = new AtomicReference<>(EventModelServiceImplTest.TENANT);
-        AtomicReference<CurrentPrincipal> principal = new AtomicReference<>(EventModelServiceImplTest.DESIGNER);
-        var repositories = new InMemoryEventRegistryRepositories();
-        var audit = mock(WorkflowOperationAuditService.class);
-        var events = new EventModelServiceImpl(repositories.drafts, repositories.releases, repositories.references,
-                test.gateway, audit, tenant::get, principal::get, properties);
-        var channels = new RestChannelServiceImpl(repositories.drafts, repositories.releases, test.gateway, audit,
-                tenant::get, principal::get, properties);
-        long revision = events.saveDraft("paymentReceived", new SaveEventModelRequest(0, "Payment", null,
-                List.of(EventModelServiceImplTest.ORDER_ID, EventModelServiceImplTest.AMOUNT))).revision();
-        events.publish("paymentReceived", revision);
-        long channelRevision = channels.saveDraft("payWebhook", new SaveRestChannelRequest(0, "Pay", null, "FIXED",
-                "paymentReceived", null, List.of("erp-client"), List.of())).revision();
-        channels.publish("payWebhook", channelRevision);
+        AtomicReference<TenantContext.TenantInfo> tenant = new AtomicReference<>(EventTestPublisher.TENANT);
+        AtomicReference<CurrentPrincipal> principal = new AtomicReference<>(EventTestPublisher.DESIGNER);
+        var publisher = new EventTestPublisher(test, properties);
+        publisher.event("paymentReceived", EventTestPublisher.ORDER_ID, EventTestPublisher.AMOUNT);
+        publisher.channel("payWebhook", "paymentReceived", "erp-client");
         principal.set(InboundEventReceiverImplTest.ERP);
         receiver = new InboundEventReceiverImpl(properties, tenant::get, principal::get, test.channels,
                 test.gateway, test.events.getEventRegistry(), new InboundEventReceiverImplTest.FakeIdempotency());

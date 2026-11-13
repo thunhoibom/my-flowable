@@ -24,23 +24,23 @@ flow-engine
 |-- workflow-engine  Workflow domain, use cases, and Flowable adapters
 |-- rules-engine      Reusable condition and priority rule engine
 |-- agent-engine      Agent definitions, reliable runtime, providers, retrieval, and guardrails
-|-- platform-migrations Ordered platform schema and cross-context integrity migrations
-`-- workflow-boot    Executable application and module composition root
+|-- engine-migrations Ordered platform schema and cross-context integrity migrations
+`-- engine-boot    Executable application and module composition root
 ```
 
 Module dependency direction:
 
 ```text
-workflow-boot --> auth-engine --> shared-kernel
-workflow-boot --> workflow-engine --> shared-kernel
-workflow-boot --> platform-migrations
+engine-boot --> auth-engine --> shared-kernel
+engine-boot --> workflow-engine --> shared-kernel
+engine-boot --> engine-migrations
 workflow-engine --> rules-engine
 agent-engine --> shared-kernel
 ```
 
 `auth-engine`, `workflow-engine`, and `agent-engine` follow bounded-context-oriented DDD. The executable application,
-HTTP security chain, global exception translation, and Flyway composition live only in `workflow-boot`.
-All ordered schema changes live in `platform-migrations`; business modules do not coordinate global Flyway versions.
+HTTP security chain, global exception translation, and Flyway composition live only in `engine-boot`.
+All ordered schema changes live in `engine-migrations`; business modules do not coordinate global Flyway versions.
 
 ```text
 io.github.illuseahashmap.workflow
@@ -149,7 +149,7 @@ $env:SPRING_PROFILES_ACTIVE='local'
 $env:WORKFLOW_KEYCLOAK_SERVER_URL='https://uat-auth-sso.vetc.com.vn'
 $env:WORKFLOW_KEYCLOAK_CLIENT_ID='VETC.WORKFLOW'
 $env:WORKFLOW_KEYCLOAK_CLIENT_SECRET='<client secret>'
-mvn -pl workflow-boot -am spring-boot:run
+mvn -pl engine-boot -am spring-boot:run
 ```
 
 Required secrets:

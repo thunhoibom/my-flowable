@@ -1,4 +1,4 @@
-import { apiClient } from '@/api/http'
+import { adminBeClient } from '@/api/http'
 
 export interface CatalogInputParameter {
   name: string
@@ -169,18 +169,18 @@ function servicePath(serviceKey: string) {
 }
 
 export const serviceCatalogApi = {
-  list: () => apiClient.get<ServiceView[]>('/services'),
-  get: (serviceKey: string) => apiClient.get<ServiceView>(servicePath(serviceKey)),
+  list: () => adminBeClient.get<ServiceView[]>('/services'),
+  get: (serviceKey: string) => adminBeClient.get<ServiceView>(servicePath(serviceKey)),
   create: (payload: { serviceKey: string; name: string }) =>
-    apiClient.post<void>('/services', payload),
+    adminBeClient.post<void>('/services', payload),
   update: (serviceKey: string, payload: { name: string }) =>
-    apiClient.post<void>('/services', { serviceKey, name: payload.name }),
+    adminBeClient.post<void>('/services', { serviceKey, name: payload.name }),
   saveSettings: (serviceKey: string, payload: SaveServiceSettingsCommand) =>
-    apiClient.put<void>(`${servicePath(serviceKey)}/settings`, payload),
+    adminBeClient.put<void>(`${servicePath(serviceKey)}/settings`, payload),
   saveOperation: (serviceKey: string, operationKey: string, payload: SaveOperationCommand) =>
-    apiClient.put<void>(`${servicePath(serviceKey)}/operations/${operationKey}`, payload),
-  publish: (serviceKey: string) => apiClient.post<void>(`${servicePath(serviceKey)}/publish`),
+    adminBeClient.put<void>(`${servicePath(serviceKey)}/operations/${operationKey}`, payload),
+  publish: (serviceKey: string) => adminBeClient.post<void>(`${servicePath(serviceKey)}/publish`),
   deleteOperation: (serviceKey: string, operationKey: string) =>
-    apiClient.delete<void>(`${servicePath(serviceKey)}/operations/${operationKey}`),
-  deleteService: (serviceKey: string) => apiClient.delete<void>(servicePath(serviceKey)),
+    adminBeClient.delete<void>(`${servicePath(serviceKey)}/operations/${operationKey}`),
+  deleteService: (serviceKey: string) => adminBeClient.delete<void>(servicePath(serviceKey)),
 }

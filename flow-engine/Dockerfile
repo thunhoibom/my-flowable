@@ -2,7 +2,7 @@ FROM maven:3.9.16-eclipse-temurin-25 AS build
 
 WORKDIR /workspace
 COPY . ./
-RUN mvn -pl workflow-boot -am -DskipTests package
+RUN mvn -pl engine-boot -am -DskipTests package
 
 FROM eclipse-temurin:25-jre
 
@@ -11,7 +11,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --create-home workflow
 WORKDIR /app
-COPY --from=build /workspace/workflow-boot/target/workflow-boot-*.jar app.jar
+COPY --from=build /workspace/engine-boot/target/engine-boot-*.jar app.jar
 USER workflow
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

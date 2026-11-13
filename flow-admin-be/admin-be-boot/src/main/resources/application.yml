@@ -1,6 +1,23 @@
 spring:
   application:
     name: flow-admin-be
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  # Same DB and schema (public) as Flow Engine. Flow Admin BE only touches the tables it owns
+  # (architecture spec, "Bảng nào thuộc bên nào").
+  datasource:
+    url: ${ADMIN_BE_DB_URL:jdbc:postgresql://localhost:5433/workflow_agent}
+    username: ${ADMIN_BE_DB_USERNAME:workflow_agent}
+    password: ${ADMIN_BE_DB_PASSWORD:workflow_agent}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/admin-be
+    # Separate history table so it never collides with Flow Engine's flyway_schema_history.
+    table: flyway_schema_history_admin_be
+    baseline-on-migrate: true
+    baseline-version: 0
 
 server:
   port: ${ADMIN_BE_PORT:8081}
@@ -10,3 +27,24 @@ management:
     web:
       exposure:
         include: health,info
+
+flow-admin:
+  engine:
+    # Flow Engine itself, not through a proxy that rewrites paths (the service token signs the path).
+    base-url: ${FLOW_ENGINE_URL:http://localhost:8080}
+    client-code: ${FLOW_ENGINE_CLIENT_CODE:flow-admin-be}
+    # Must equal FLOW_ADMIN_BE_SERVICE_SECRET of Flow Engine (service client flow-admin-be, V43).
+    client-secret: ${FLOW_ADMIN_BE_SERVICE_SECRET:}
+    token-version: ${FLOW_ENGINE_CLIENT_TOKEN_VERSION:1}
+    # Which base URL of a catalog entry belongs to this Flow Engine.
+    environment: ${WORKFLOW_SERVICES_ENVIRONMENT:default}
+  auth:
+    access-token-cookie: ${WORKFLOW_AUTH_COOKIE_NAME:workflow-agent.access-token}
+    cache-ttl: ${FLOW_ADMIN_AUTH_CACHE_TTL:60s}
+  service-secrets:
+    # Same key as Flow Engine's workflow.service.secrets.master-key-base64: catalog secrets were encrypted with it.
+    master-key-base64: ${WORKFLOW_SERVICE_SECRET_KEY_BASE64:${WORKFLOW_MASTER_KEY_BASE64:}}
+
+workflow:
+  event-registry:
+    enabled: ${WORKFLOW_EVENT_REGISTRY_ENABLED:true}

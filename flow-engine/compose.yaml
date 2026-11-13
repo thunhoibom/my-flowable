@@ -48,6 +48,8 @@ services:
       WORKFLOW_KEYCLOAK_CLIENT_SECRET: ${WORKFLOW_KEYCLOAK_CLIENT_SECRET:-}
       WORKFLOW_KEYCLOAK_ALLOWED_CLIENT_IDS: ${WORKFLOW_KEYCLOAK_ALLOWED_CLIENT_IDS:-}
       WORKFLOW_EIM_APP_CODE: ${WORKFLOW_EIM_APP_CODE:-VETC.WORKFLOW}
+      # Shared secret of the service client flow-admin-be (V43); Flow Admin BE signs Deployment API calls with it.
+      FLOW_ADMIN_BE_SERVICE_SECRET: ${FLOW_ADMIN_BE_SERVICE_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy

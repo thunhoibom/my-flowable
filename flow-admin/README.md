@@ -33,7 +33,9 @@ corepack pnpm install
 corepack pnpm dev
 ```
 
-The development server proxies `/api` to `http://localhost:8080`. Override it through a local environment file based on `.env.example`.
+The development server proxies `/api/engine` to Flow Engine (`http://localhost:8080`) and `/api/admin-be` to Flow Admin BE (`http://localhost:8081`). Override the targets through a local environment file based on `.env.example` (`VITE_ENGINE_PROXY_TARGET`, `VITE_ADMIN_BE_PROXY_TARGET`).
+
+The Docker image renders `nginx.conf.template` at start-up from `FLOW_ENGINE_URL` and `FLOW_ADMIN_BE_URL`, so the same image works in every environment.
 
 ## Verification
 

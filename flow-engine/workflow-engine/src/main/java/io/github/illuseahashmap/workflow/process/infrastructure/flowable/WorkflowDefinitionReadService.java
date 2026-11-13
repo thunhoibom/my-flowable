@@ -2,10 +2,6 @@ package io.github.illuseahashmap.workflow.process.infrastructure.flowable;
 
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessDefinitionDiagramView;
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessDefinitionSummaryView;
-import io.github.illuseahashmap.workflow.process.application.port.ProcessDraftRepository;
-import io.github.illuseahashmap.workflow.process.application.port.ProcessReleaseRepository;
-import io.github.illuseahashmap.workflow.process.domain.ProcessDraftHeader;
-import io.github.illuseahashmap.workflow.process.domain.ProcessRelease;
 import io.github.illuseahashmap.workflow.shared.context.TenantProvider;
 import io.github.illuseahashmap.workflow.shared.exception.BusinessException;
 import io.github.illuseahashmap.workflow.shared.exception.ErrorCode;
@@ -19,7 +15,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.repository.Deployment;
@@ -37,19 +32,13 @@ class WorkflowDefinitionReadService {
 
     private final RepositoryService repositoryService;
     private final TenantProvider tenantProvider;
-    private final ProcessDraftRepository drafts;
-    private final ProcessReleaseRepository releases;
     private final ProcessDefinitionLookup lookup;
 
     WorkflowDefinitionReadService(RepositoryService repositoryService,
                                   TenantProvider tenantProvider,
-                                  ProcessDraftRepository drafts,
-                                  ProcessReleaseRepository releases,
                                   ProcessDefinitionLookup lookup) {
         this.repositoryService = repositoryService;
         this.tenantProvider = tenantProvider;
-        this.drafts = drafts;
-        this.releases = releases;
         this.lookup = lookup;
     }
 
@@ -63,19 +52,14 @@ class WorkflowDefinitionReadService {
                 .processDefinitionTenantId(tenantId)
                 .latestVersion()
                 .list();
-        Map<String, ProcessDraftHeader> draftsByKey = drafts.listHeaders(tenantId).stream()
-                .collect(Collectors.toMap(ProcessDraftHeader::processDefinitionKey, Function.identity()));
-        Map<String, ProcessRelease> releaseByDefinition = releases.latestByDefinition(tenantId);
         Map<String, OffsetDateTime> deploymentTimes = deploymentTimes(definitions.stream()
                 .map(ProcessDefinition::getDeploymentId)
                 .collect(Collectors.toSet()));
 
         List<ProcessDefinitionSummaryView> summaries = new ArrayList<>();
         for (ProcessDefinition definition : definitions) {
-            summaries.add(toSummary(definition, releaseByDefinition.get(definition.getId()),
-                    draftsByKey.remove(definition.getKey()), deploymentTimes));
+            summaries.add(toSummary(definition, deploymentTimes));
         }
-        draftsByKey.values().forEach(draft -> summaries.add(draftOnly(draft, tenantId)));
 
         List<ProcessDefinitionSummaryView> filtered = summaries.stream()
                 .filter(summary -> matches(summary.processDefinitionKey(), key))
@@ -110,27 +94,20 @@ class WorkflowDefinitionReadService {
         return lookup.xml(definition);
     }
 
-    private ProcessDefinitionSummaryView toSummary(ProcessDefinition definition, ProcessRelease release,
-                                                   ProcessDraftHeader draft,
+    /** Deployed versions only: drafts and the publish history are in Flow Admin BE. */
+    private ProcessDefinitionSummaryView toSummary(ProcessDefinition definition,
                                                    Map<String, OffsetDateTime> deploymentTimes) {
         boolean running = !definition.isSuspended();
-        boolean changed = draft != null && release != null && !draft.xmlSha256().equals(release.xmlSha256());
         return new ProcessDefinitionSummaryView(
                 definition.getId(), definition.getKey(), definition.getName(), definition.getVersion(),
                 definition.getDeploymentId(), deploymentTimes.get(definition.getDeploymentId()),
                 running ? definition.getVersion() : null,
                 running ? definition.getId() : null,
                 running ? definition.getDeploymentId() : null,
-                release == null ? null : release.performedAt(),
+                null,
                 running ? PUBLISHED : SUSPENDED,
                 definition.getTenantId(),
-                changed);
-    }
-
-    private static ProcessDefinitionSummaryView draftOnly(ProcessDraftHeader draft, String tenantId) {
-        return new ProcessDefinitionSummaryView(
-                null, draft.processDefinitionKey(), draft.name(), 0, null, draft.updatedAt(),
-                null, null, null, null, DRAFT_ONLY, tenantId, true);
+                false);
     }
 
     private static boolean matches(String value, String filter) {

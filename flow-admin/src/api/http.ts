@@ -1,5 +1,6 @@
 import axios, {
   AxiosError,
+  type AxiosInstance,
   type AxiosRequestConfig,
   type AxiosResponse,
   type InternalAxiosRequestConfig,
@@ -47,19 +48,27 @@ export function fallbackHttpMessage(status: number | undefined, transportMessage
   return transportMessage || 'Không kết nối được. Hãy thử lại.'
 }
 
-export const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: 15_000,
-  withCredentials: true,
-  withXSRFToken: true,
-  xsrfCookieName: 'XSRF-TOKEN',
-  xsrfHeaderName: 'X-XSRF-TOKEN',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
+function createHttp(baseURL: string) {
+  return axios.create({
+    baseURL,
+    timeout: 15_000,
+    withCredentials: true,
+    withXSRFToken: true,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+}
 
-http.interceptors.request.use((config) => {
+/** Flow Engine: runtime, sign-in (/auth/**), and everything not yet moved to Flow Admin BE. */
+export const http = createHttp(import.meta.env.VITE_API_BASE_URL || '/api/engine')
+
+/** Flow Admin BE: Design (drafts, publishing, service catalog, event library). */
+export const adminBeHttp = createHttp(import.meta.env.VITE_ADMIN_BE_BASE_URL || '/api/admin-be')
+
+function addAuth(config: InternalAxiosRequestConfig) {
   const accessToken = getAccessToken()
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`
   if (!config.headers.has(TENANT_HEADER)) {
@@ -67,7 +76,10 @@ http.interceptors.request.use((config) => {
     if (tenantCode) config.headers.set(TENANT_HEADER, tenantCode)
   }
   return config
-})
+}
+
+http.interceptors.request.use(addAuth)
+adminBeHttp.interceptors.request.use(addAuth)
 
 function isSessionEndpoint(url: string | undefined) {
   if (!url) return false
@@ -108,30 +120,37 @@ export function refreshSession(): Promise<boolean> {
   return refreshInFlight
 }
 
-http.interceptors.response.use(undefined, async (error: AxiosError<ApiResponse<unknown>>) => {
-  const config = error.config as SessionAwareConfig | undefined
-  if (
-    error.response?.status === 401 &&
-    config &&
-    !config._sessionRetried &&
-    !isSessionEndpoint(config.url) &&
-    readAuthSession()
-  ) {
-    // The filter rejects before any handler runs, so replaying the request is safe.
-    config._sessionRetried = true
-    if (await refreshSession()) return http.request(config)
-  }
-  const body = error.response?.data
-  const traceId = error.response?.headers['x-trace-id'] as string | undefined
-  if (error.response?.status === 401 && !config?._skipAuthHandling) {
-    clearAuthSession()
-    window.dispatchEvent(new CustomEvent('workflow-auth:unauthorized'))
-  }
-  const message = body?.message || fallbackHttpMessage(error.response?.status, error.message || '')
-  return Promise.reject(
-    new ApiError(message, body?.code || 'HTTP_ERROR', error.response?.status, traceId),
-  )
-})
+/** Same error handling for both backends; the session is always refreshed through Flow Engine. */
+function handleErrors(instance: AxiosInstance) {
+  instance.interceptors.response.use(undefined, async (error: AxiosError<ApiResponse<unknown>>) => {
+    const config = error.config as SessionAwareConfig | undefined
+    if (
+      error.response?.status === 401 &&
+      config &&
+      !config._sessionRetried &&
+      !isSessionEndpoint(config.url) &&
+      readAuthSession()
+    ) {
+      // The filter rejects before any handler runs, so replaying the request is safe.
+      config._sessionRetried = true
+      if (await refreshSession()) return instance.request(config)
+    }
+    const body = error.response?.data
+    const traceId = error.response?.headers['x-trace-id'] as string | undefined
+    if (error.response?.status === 401 && !config?._skipAuthHandling) {
+      clearAuthSession()
+      window.dispatchEvent(new CustomEvent('workflow-auth:unauthorized'))
+    }
+    const message =
+      body?.message || fallbackHttpMessage(error.response?.status, error.message || '')
+    return Promise.reject(
+      new ApiError(message, body?.code || 'HTTP_ERROR', error.response?.status, traceId),
+    )
+  })
+}
+
+handleErrors(http)
+handleErrors(adminBeHttp)
 
 async function unwrap<T>(request: Promise<AxiosResponse<ApiResponse<T>>>) {
   const response = await request
@@ -158,23 +177,32 @@ async function withCsrf(config?: AxiosRequestConfig): Promise<AxiosRequestConfig
   }
 }
 
-export const apiClient = {
-  get<T>(url: string, config?: AxiosRequestConfig) {
-    return unwrap(http.get<ApiResponse<T>>(url, config))
-  },
-  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig) {
-    return unwrap(http.post<ApiResponse<T>>(url, data, await withCsrf(config)))
-  },
-  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig) {
-    return unwrap(http.put<ApiResponse<T>>(url, data, await withCsrf(config)))
-  },
-  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig) {
-    return unwrap(http.patch<ApiResponse<T>>(url, data, await withCsrf(config)))
-  },
-  async delete<T>(url: string, config?: AxiosRequestConfig) {
-    return unwrap(http.delete<ApiResponse<T>>(url, await withCsrf(config)))
-  },
+/** Unwraps {@link ApiResponse}; unsafe methods carry the CSRF token issued by Flow Engine. */
+function createClient(instance: AxiosInstance) {
+  return {
+    get<T>(url: string, config?: AxiosRequestConfig) {
+      return unwrap(instance.get<ApiResponse<T>>(url, config))
+    },
+    async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig) {
+      return unwrap(instance.post<ApiResponse<T>>(url, data, await withCsrf(config)))
+    },
+    async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig) {
+      return unwrap(instance.put<ApiResponse<T>>(url, data, await withCsrf(config)))
+    },
+    async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig) {
+      return unwrap(instance.patch<ApiResponse<T>>(url, data, await withCsrf(config)))
+    },
+    async delete<T>(url: string, config?: AxiosRequestConfig) {
+      return unwrap(instance.delete<ApiResponse<T>>(url, await withCsrf(config)))
+    },
+  }
 }
+
+/** Flow Engine. */
+export const apiClient = createClient(http)
+
+/** Flow Admin BE: Design. */
+export const adminBeClient = createClient(adminBeHttp)
 
 export function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : operationFailedMessage

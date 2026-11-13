@@ -104,7 +104,7 @@ public class RedisProcessInstanceLock implements ProcessInstanceLock {
     }
 
     private String normalizePrefix(String prefix) {
-        String normalized = StringUtils.hasText(prefix) ? prefix.trim() : "workflow-agent-service";
+        String normalized = StringUtils.hasText(prefix) ? prefix.trim() : "flow-engine";
         while (normalized.endsWith(":")) {
             normalized = normalized.substring(0, normalized.length() - 1);
         }

@@ -1,21 +1,16 @@
 package io.github.illuseahashmap.workflow.eventregistry.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 import io.github.illuseahashmap.workflow.config.EventRegistryProperties;
 import io.github.illuseahashmap.workflow.eventregistry.application.dto.EventFieldView;
 import io.github.illuseahashmap.workflow.eventregistry.application.dto.InboundEventResult;
-import io.github.illuseahashmap.workflow.eventregistry.application.dto.SaveEventModelRequest;
-import io.github.illuseahashmap.workflow.eventregistry.application.dto.SaveRestChannelRequest;
 import io.github.illuseahashmap.workflow.eventregistry.application.port.InboundIdempotency;
-import io.github.illuseahashmap.workflow.process.application.WorkflowOperationAuditService;
 import io.github.illuseahashmap.workflow.shared.context.CurrentPrincipal;
 import io.github.illuseahashmap.workflow.shared.context.TenantContext;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -43,23 +38,18 @@ class InboundEventReceiverImplTest {
     static void start() {
         test = new EventRegistryTestEngine("inbound-event-receiver");
         PROPERTIES.setEnabled(true);
-        TENANT.set(EventModelServiceImplTest.TENANT);
-        PRINCIPAL.set(EventModelServiceImplTest.DESIGNER);
-        var repositories = new InMemoryEventRegistryRepositories();
-        var audit = mock(WorkflowOperationAuditService.class);
-        var events = new EventModelServiceImpl(repositories.drafts, repositories.releases, repositories.references,
-                test.gateway, audit, TENANT::get, PRINCIPAL::get, PROPERTIES);
-        var channels = new RestChannelServiceImpl(repositories.drafts, repositories.releases, test.gateway, audit,
-                TENANT::get, PRINCIPAL::get, PROPERTIES);
+        TENANT.set(EventTestPublisher.TENANT);
+        PRINCIPAL.set(EventTestPublisher.DESIGNER);
+        var publisher = new EventTestPublisher(test, PROPERTIES);
 
-        publishEvent(events, "paymentReceived", EventModelServiceImplTest.ORDER_ID, EventModelServiceImplTest.AMOUNT);
-        publishChannel(channels, "payWebhook", "paymentReceived");
+        publisher.event("paymentReceived", EventTestPublisher.ORDER_ID, EventTestPublisher.AMOUNT);
+        publisher.channel("payWebhook", "paymentReceived", "erp-client");
         test.deployWaitingProcess("t1", "payProcess", "paymentReceived");
 
-        publishEvent(events, "headerProbe", EventModelServiceImplTest.ORDER_ID,
+        publisher.event("headerProbe", EventTestPublisher.ORDER_ID,
                 new EventFieldView("authorization", "string", false, true, false),
                 new EventFieldView("source", "string", false, true, false));
-        publishChannel(channels, "headerHook", "headerProbe");
+        publisher.channel("headerHook", "headerProbe", "erp-client");
         test.engine.getRepositoryService().createDeployment().tenantId("t1")
                 .addString("header.bpmn20.xml", EventRegistryTestEngine.waitingProcess("headerProcess", "headerProbe")
                         .replace("<flowable:eventOutParameter source=\"amount\" target=\"paidAmount\"/>",
@@ -67,9 +57,9 @@ class InboundEventReceiverImplTest {
                                         + "<flowable:eventOutParameter source=\"source\" target=\"src\"/>"))
                 .deploy();
 
-        publishEvent(events, "twoKeys", EventModelServiceImplTest.ORDER_ID,
+        publisher.event("twoKeys", EventTestPublisher.ORDER_ID,
                 new EventFieldView("region", "string", true, false, false));
-        publishChannel(channels, "twoKeysHook", "twoKeys");
+        publisher.channel("twoKeysHook", "twoKeys", "erp-client");
 
         receiver = new InboundEventReceiverImpl(PROPERTIES, TENANT::get, PRINCIPAL::get, test.channels,
                 test.gateway, test.events.getEventRegistry(), IDEMPOTENCY);
@@ -82,19 +72,8 @@ class InboundEventReceiverImplTest {
 
     @BeforeEach
     void caller() {
-        TENANT.set(EventModelServiceImplTest.TENANT);
+        TENANT.set(EventTestPublisher.TENANT);
         PRINCIPAL.set(ERP);
-    }
-
-    private static void publishEvent(EventModelServiceImpl events, String key, EventFieldView... fields) {
-        long revision = events.saveDraft(key, new SaveEventModelRequest(0, key, null, List.of(fields))).revision();
-        events.publish(key, revision);
-    }
-
-    private static void publishChannel(RestChannelServiceImpl channels, String key, String eventKey) {
-        long revision = channels.saveDraft(key, new SaveRestChannelRequest(0, key, null, "FIXED", eventKey,
-                null, List.of("erp-client"), List.of())).revision();
-        channels.publish(key, revision);
     }
 
     private static ProcessInstance start(String processKey, String orderId) {

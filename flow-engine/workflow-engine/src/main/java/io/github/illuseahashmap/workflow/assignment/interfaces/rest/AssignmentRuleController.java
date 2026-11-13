@@ -18,6 +18,14 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
 
+/**
+ * Editing the rules of a deployed version.
+ *
+ * @deprecated Rules belong to the deployment: they come with {@code POST /api/deployment/processes} and are fixed
+ *     with the version (architecture spec, phase 1). These endpoints stay until Design keeps draft rules in Flow
+ *     Admin BE (phase 2), then they go.
+ */
+@Deprecated
 @RestController
 @RequestMapping("/workflow/node-assignment-rule")
 @PreAuthorize("hasAnyRole('SERVICE', 'WF_PLATFORM_ADMIN', 'WF_ADMIN')")

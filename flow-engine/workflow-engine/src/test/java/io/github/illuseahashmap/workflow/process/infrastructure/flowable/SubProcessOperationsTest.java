@@ -80,7 +80,6 @@ class SubProcessOperationsTest {
         administration = new WorkflowAdministrationServiceImpl(engine.getRepositoryService(),
                 engine.getRuntimeService(), engine.getHistoryService(), mock(JdbcTemplate.class), executor,
                 null, reads, TENANT_PROVIDER, mock(AssignmentRuleService.class), auditService,
-                new InMemoryProcessRepositories.Drafts(), new InMemoryProcessRepositories.Releases(),
                 new InMemoryProcessRepositories.References(), mock(EventReferenceRepository.class));
     }
 

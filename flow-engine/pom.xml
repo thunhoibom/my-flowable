@@ -25,8 +25,8 @@
         <module>service-registry</module>
         <module>agent-engine</module>
         <module>workflow-engine</module>
-        <module>platform-migrations</module>
-        <module>workflow-boot</module>
+        <module>engine-migrations</module>
+        <module>engine-boot</module>
     </modules>
 
     <properties>

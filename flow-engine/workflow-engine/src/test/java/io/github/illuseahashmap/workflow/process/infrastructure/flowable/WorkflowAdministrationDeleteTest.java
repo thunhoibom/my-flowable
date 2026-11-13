@@ -8,14 +8,10 @@ import static org.mockito.Mockito.verify;
 import io.github.illuseahashmap.workflow.eventregistry.application.port.EventReferenceRepository;
 import io.github.illuseahashmap.workflow.assignment.application.AssignmentRuleService;
 import io.github.illuseahashmap.workflow.process.application.WorkflowOperationAuditService;
-import io.github.illuseahashmap.workflow.process.domain.ProcessDraft;
-import io.github.illuseahashmap.workflow.process.domain.ProcessRelease;
-import io.github.illuseahashmap.workflow.process.domain.ReleaseAction;
 import io.github.illuseahashmap.workflow.process.infrastructure.lock.ProcessInstanceTransactionExecutor;
 import io.github.illuseahashmap.workflow.shared.context.TenantContext;
 import io.github.illuseahashmap.workflow.shared.exception.BusinessException;
 import io.github.illuseahashmap.workflow.shared.exception.ErrorCode;
-import java.time.OffsetDateTime;
 import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.impl.cfg.StandaloneInMemProcessEngineConfiguration;
 import org.flowable.engine.repository.ProcessDefinition;
@@ -30,8 +26,6 @@ class WorkflowAdministrationDeleteTest {
     private static final String TENANT = "tenant-delete";
     private static ProcessEngine engine;
 
-    private InMemoryProcessRepositories.Drafts drafts;
-    private InMemoryProcessRepositories.Releases releases;
     private InMemoryProcessRepositories.References callReferences;
     private AssignmentRuleService rules;
     private WorkflowAdministrationServiceImpl service;
@@ -52,20 +46,29 @@ class WorkflowAdministrationDeleteTest {
 
     @BeforeEach
     void setUp() {
-        drafts = new InMemoryProcessRepositories.Drafts();
-        releases = new InMemoryProcessRepositories.Releases();
         callReferences = new InMemoryProcessRepositories.References();
         rules = mock(AssignmentRuleService.class);
         service = new WorkflowAdministrationServiceImpl(engine.getRepositoryService(), engine.getRuntimeService(),
                 engine.getHistoryService(), mock(JdbcTemplate.class), mock(ProcessInstanceTransactionExecutor.class),
                 null, null, () -> new TenantContext.TenantInfo(TENANT, "del", "Del"), rules,
-                mock(WorkflowOperationAuditService.class), drafts, releases, callReferences,
+                mock(WorkflowOperationAuditService.class), callReferences,
                 mock(EventReferenceRepository.class));
+    }
+
+    private static String userTaskXml(String key) {
+        return """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="t">
+                  <process id="%s" isExecutable="true">
+                    <startEvent id="s"/><userTask id="a"/><endEvent id="e"/>
+                    <sequenceFlow id="f1" sourceRef="s" targetRef="a"/><sequenceFlow id="f2" sourceRef="a" targetRef="e"/>
+                  </process>
+                </definitions>""".formatted(key);
     }
 
     private static ProcessDefinition deploy(String key) {
         var deployment = engine.getRepositoryService().createDeployment().tenantId(TENANT)
-                .addString(key + ".bpmn20.xml", ProcessPublishServiceImplTest.userTaskXml(key, "a")).deploy();
+                .addString(key + ".bpmn20.xml", userTaskXml(key)).deploy();
         return engine.getRepositoryService().createProcessDefinitionQuery()
                 .deploymentId(deployment.getId()).singleResult();
     }
@@ -121,17 +124,13 @@ class WorkflowAdministrationDeleteTest {
     }
 
     @Test
-    void deleteKeyRemovesDraftAndReleases() {
-        ProcessDefinition v1 = deploy("x5");
-        drafts.insert(ProcessDraft.of(TENANT, "x5", "X5", "<a/>", 1, "alice", OffsetDateTime.now()));
-        releases.append(new ProcessRelease(null, TENANT, "x5", v1.getId(), 1, ReleaseAction.PUBLISH, null,
-                "0".repeat(64), "alice", OffsetDateTime.now()));
+    void deleteKeyRemovesEveryVersionAndItsRules() {
+        deploy("x5");
+        deploy("x5");
 
         service.deleteProcessDefinitions("x5");
 
         assertThat(count("x5")).isZero();
-        assertThat(drafts.find(TENANT, "x5")).isEmpty();
-        assertThat(releases.hasAny(TENANT, "x5")).isFalse();
         verify(rules).deleteByProcessDefinitionKey("x5");
     }
 
@@ -154,12 +153,7 @@ class WorkflowAdministrationDeleteTest {
     }
 
     @Test
-    void deleteKeyRemovesADraftOnlyProcess() {
-        drafts.insert(ProcessDraft.of(TENANT, "x6", "X6", "<a/>", 1, "alice", OffsetDateTime.now()));
-
-        service.deleteProcessDefinitions("x6");
-
-        assertThat(drafts.find(TENANT, "x6")).isEmpty();
+    void deleteKeyOfANeverDeployedProcessIsNotFound() {
         assertThatThrownBy(() -> service.deleteProcessDefinitions("x6"))
                 .isInstanceOfSatisfying(BusinessException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.NOT_FOUND));

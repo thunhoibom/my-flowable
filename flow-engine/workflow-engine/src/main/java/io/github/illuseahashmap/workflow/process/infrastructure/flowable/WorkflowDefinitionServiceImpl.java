@@ -1,17 +1,7 @@
 package io.github.illuseahashmap.workflow.process.infrastructure.flowable;
 
-import io.github.illuseahashmap.workflow.process.application.ProcessPublishService;
 import io.github.illuseahashmap.workflow.process.application.WorkflowDefinitionService;
-import io.github.illuseahashmap.workflow.process.application.dto.ActivateProcessVersionRequest;
-import io.github.illuseahashmap.workflow.process.application.dto.ActiveProcessVersionResult;
-import io.github.illuseahashmap.workflow.process.application.dto.DeployProcessRequest;
-import io.github.illuseahashmap.workflow.process.application.dto.DeployProcessResult;
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessDefinitionView;
-import io.github.illuseahashmap.workflow.process.application.dto.PublishProcessResult;
-import io.github.illuseahashmap.workflow.process.application.dto.RollbackProcessRequest;
-import io.github.illuseahashmap.workflow.process.application.port.ProcessDraftRepository;
-import io.github.illuseahashmap.workflow.process.application.port.ProcessReleaseRepository;
-import io.github.illuseahashmap.workflow.process.domain.ProcessRelease;
 import io.github.illuseahashmap.workflow.shared.context.TenantProvider;
 import io.github.illuseahashmap.workflow.shared.exception.BusinessException;
 import io.github.illuseahashmap.workflow.shared.exception.ErrorCode;
@@ -21,10 +11,7 @@ import java.util.List;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.repository.Deployment;
 import org.flowable.engine.repository.ProcessDefinition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
@@ -34,36 +21,17 @@ import org.springframework.util.StringUtils;
 @Service
 public class WorkflowDefinitionServiceImpl implements WorkflowDefinitionService {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(WorkflowDefinitionServiceImpl.class);
 
     private final RepositoryService repositoryService;
     private final TenantProvider tenantProvider;
-    private final ProcessPublishService publishService;
-    private final ProcessReleaseRepository releases;
-    private final ProcessDraftRepository drafts;
     private final ProcessDefinitionLookup lookup;
 
     public WorkflowDefinitionServiceImpl(RepositoryService repositoryService,
                                          TenantProvider tenantProvider,
-                                         ProcessPublishService publishService,
-                                         ProcessReleaseRepository releases,
-                                         ProcessDraftRepository drafts,
                                          ProcessDefinitionLookup lookup) {
         this.repositoryService = repositoryService;
         this.tenantProvider = tenantProvider;
-        this.publishService = publishService;
-        this.releases = releases;
-        this.drafts = drafts;
         this.lookup = lookup;
-    }
-
-    /** CI/SERVICE entry point: overwrites the draft and publishes it in one call. */
-    @Override
-    public DeployProcessResult deploy(DeployProcessRequest request) {
-        PublishProcessResult result = publishService.publishXml(
-                request.processDefinitionKey().trim(), request.processDefinitionName().trim(), request.bpmnXml());
-        return new DeployProcessResult(result.deploymentId(), result.processDefinitionId(),
-                result.processDefinitionKey(), result.processDefinitionName(), result.version());
     }
 
     @Override
@@ -76,51 +44,10 @@ public class WorkflowDefinitionServiceImpl implements WorkflowDefinitionService 
         return latest.getId();
     }
 
-    /**
-     * Kept for one release. The latest version resumes it, an older version rolls back to it.
-     *
-     * @deprecated use publish, resume or rollback
-     */
-    @Override
-    @Deprecated
-    @Transactional(rollbackFor = Exception.class)
-    public ActiveProcessVersionResult activate(ActivateProcessVersionRequest request) {
-        LOGGER.warn("Deprecated /definition/activate called for {} v{}",
-                request.processDefinitionKey(), request.version());
-        String tenantId = tenantProvider.current().tenantId();
-        ProcessDefinition latest = lookup.latest(tenantId, request.processDefinitionKey())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,
-                        "Process definition version does not exist"));
-        if (request.version() == latest.getVersion()) {
-            if (latest.isSuspended()) {
-                publishService.resume(request.processDefinitionKey());
-            }
-        } else if (request.version() < latest.getVersion()) {
-            publishService.rollback(request.processDefinitionKey(), new RollbackProcessRequest(request.version()));
-        } else {
-            throw new BusinessException(ErrorCode.NOT_FOUND, "Process definition version does not exist");
-        }
-        return getActiveVersion(request.processDefinitionKey());
-    }
-
-    @Override
-    public ActiveProcessVersionResult getActiveVersion(String processDefinitionKey) {
-        String tenantId = tenantProvider.current().tenantId();
-        ProcessDefinition latest = lookup.latest(tenantId, processDefinitionKey)
-                .filter(definition -> !definition.isSuspended())
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND,
-                        "Active process definition version does not exist"));
-        ProcessRelease release = releases.latestByDefinition(tenantId).get(latest.getId());
-        return new ActiveProcessVersionResult(tenantId, processDefinitionKey, latest.getId(), latest.getVersion(),
-                release == null ? null : release.performedBy(),
-                release == null ? deploymentTime(latest.getDeploymentId()) : release.performedAt());
-    }
-
     @Override
     public boolean exists(String processDefinitionKey) {
         String tenantId = tenantProvider.current().tenantId();
-        return lookup.anyVersion(tenantId, processDefinitionKey)
-                || drafts.find(tenantId, processDefinitionKey).isPresent();
+        return lookup.anyVersion(tenantId, processDefinitionKey);
     }
 
     @Override

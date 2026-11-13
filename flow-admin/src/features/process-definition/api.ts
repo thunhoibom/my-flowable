@@ -1,4 +1,4 @@
-import { apiClient } from '@/api/http'
+import { adminBeClient, apiClient } from '@/api/http'
 import type { PageResult } from '@/types/api'
 import type {
   DefinitionPageQuery,
@@ -16,7 +16,7 @@ const key = (processDefinitionKey: string) => encodeURIComponent(processDefiniti
 
 export const definitionApi = {
   page: (params: DefinitionPageQuery) =>
-    apiClient.get<PageResult<ProcessDefinitionSummary>>(`${ROOT}/definitions/page`, { params }),
+    adminBeClient.get<PageResult<ProcessDefinitionSummary>>(`${ROOT}/definitions/page`, { params }),
   listProcesses: () => apiClient.get<ProcessDefinition[]>(`${ROOT}/definitions`),
   listVersions: (processDefinitionKey: string) =>
     apiClient.get<ProcessDefinition[]>(`${ROOT}/definitions`, {
@@ -33,41 +33,41 @@ export const definitionApi = {
     processDefinitionKey: string
     processDefinitionName: string
     bpmnXml: string
-  }) => apiClient.post<DeployProcessResult>(`${ROOT}/deploy`, payload),
+  }) => adminBeClient.post<DeployProcessResult>(`${ROOT}/deploy`, payload),
 
   draft: (processDefinitionKey: string) =>
-    apiClient.get<ProcessDraft>(`${ROOT}/drafts/${key(processDefinitionKey)}`),
+    adminBeClient.get<ProcessDraft>(`${ROOT}/drafts/${key(processDefinitionKey)}`),
   createDraft: (payload: { processDefinitionKey: string; name: string; bpmnXml: string }) =>
-    apiClient.post<ProcessDraft>(`${ROOT}/drafts`, payload),
+    adminBeClient.post<ProcessDraft>(`${ROOT}/drafts`, payload),
   saveDraft: (
     processDefinitionKey: string,
     payload: { name: string; bpmnXml: string; revision: number },
-  ) => apiClient.put<ProcessDraft>(`${ROOT}/drafts/${key(processDefinitionKey)}`, payload),
+  ) => adminBeClient.put<ProcessDraft>(`${ROOT}/drafts/${key(processDefinitionKey)}`, payload),
   loadVersionIntoDraft: (
     processDefinitionKey: string,
     payload: { version: number; revision: number },
   ) =>
-    apiClient.post<ProcessDraft>(
+    adminBeClient.post<ProcessDraft>(
       `${ROOT}/drafts/${key(processDefinitionKey)}/load-version`,
       payload,
     ),
   discardDraft: (processDefinitionKey: string, revision: number) =>
-    apiClient.post<ProcessDraft>(`${ROOT}/drafts/${key(processDefinitionKey)}/discard`, {
+    adminBeClient.post<ProcessDraft>(`${ROOT}/drafts/${key(processDefinitionKey)}/discard`, {
       revision,
     }),
 
   publish: (processDefinitionKey: string, revision: number) =>
-    apiClient.post<PublishProcessResult>(`${ROOT}/${key(processDefinitionKey)}/publish`, {
+    adminBeClient.post<PublishProcessResult>(`${ROOT}/${key(processDefinitionKey)}/publish`, {
       revision,
     }),
   rollback: (processDefinitionKey: string, version: number) =>
-    apiClient.post<PublishProcessResult>(`${ROOT}/${key(processDefinitionKey)}/rollback`, {
+    adminBeClient.post<PublishProcessResult>(`${ROOT}/${key(processDefinitionKey)}/rollback`, {
       version,
     }),
   suspend: (processDefinitionKey: string) =>
-    apiClient.post<ProcessRelease>(`${ROOT}/${key(processDefinitionKey)}/suspend`),
+    adminBeClient.post<ProcessRelease>(`${ROOT}/${key(processDefinitionKey)}/suspend`),
   resume: (processDefinitionKey: string) =>
-    apiClient.post<ProcessRelease>(`${ROOT}/${key(processDefinitionKey)}/resume`),
+    adminBeClient.post<ProcessRelease>(`${ROOT}/${key(processDefinitionKey)}/resume`),
   /** Published processes that call this one ("where used"). */
   callers: (processDefinitionKey: string) =>
     apiClient.get<ProcessReference[]>(`${ROOT}/${key(processDefinitionKey)}/callers`),
@@ -75,7 +75,7 @@ export const definitionApi = {
   callees: (processDefinitionKey: string) =>
     apiClient.get<ProcessReference[]>(`${ROOT}/${key(processDefinitionKey)}/callees`),
   releases: (processDefinitionKey: string) =>
-    apiClient.get<ProcessRelease[]>(`${ROOT}/${key(processDefinitionKey)}/releases`),
+    adminBeClient.get<ProcessRelease[]>(`${ROOT}/${key(processDefinitionKey)}/releases`),
 
   /** Start-time Agent inputs of a published process, used to suggest call activity in-mappings. */
   startInputs: (processDefinitionKey: string) =>
@@ -85,7 +85,7 @@ export const definitionApi = {
     ),
 
   deleteAll: (processDefinitionKey: string) =>
-    apiClient.delete<void>(`${ROOT}/definition`, { params: { processDefinitionKey } }),
+    adminBeClient.delete<void>(`${ROOT}/definition`, { params: { processDefinitionKey } }),
   deleteVersion: (processDefinitionKey: string, version: number) =>
     apiClient.delete<void>(`${ROOT}/definition/version`, {
       params: { processDefinitionKey, version },
