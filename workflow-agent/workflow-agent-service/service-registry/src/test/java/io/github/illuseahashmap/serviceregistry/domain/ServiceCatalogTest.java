@@ -1,0 +1,116 @@
+package io.github.illuseahashmap.serviceregistry.domain;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class ServiceCatalogTest {
+
+    @Test
+    void publishedCallUsesSnapshotUntilNextPublish() {
+        var catalog = new InMemoryServiceCatalog();
+        catalog.saveDraft(new ServiceDraft("crm", "CRM", List.of(operation("https://old.example"))));
+        org.junit.jupiter.api.Assertions.assertTrue(catalog.published("crm", "createLead").isEmpty());
+        catalog.publish("crm");
+        org.junit.jupiter.api.Assertions.assertEquals("https://old.example",
+                catalog.published("crm", "createLead").orElseThrow().urlTemplate());
+        catalog.saveDraft(new ServiceDraft("crm", "CRM", List.of(operation("https://new.example"))));
+        org.junit.jupiter.api.Assertions.assertEquals("https://old.example",
+                catalog.published("crm", "createLead").orElseThrow().urlTemplate());
+        catalog.publish("crm");
+        org.junit.jupiter.api.Assertions.assertEquals("https://new.example",
+                catalog.published("crm", "createLead").orElseThrow().urlTemplate());
+    }
+
+    @Test
+    void saveOperationReplacesParametersAndKeepsPublishedSnapshot() {
+        var catalog = new InMemoryServiceCatalog();
+        catalog.saveService("crm", "CRM");
+        catalog.saveOperation("crm", operation("https://old.example", List.of(
+                new InputParameter("orderId", ParameterType.STRING, true, ParameterLocation.PATH)), List.of(
+                new OutputParameter("id", ParameterType.LONG, "id"))));
+        catalog.publish("crm");
+
+        assertThrows(IllegalArgumentException.class, () -> catalog.saveOperation("crm", operation(
+                "https://old.example",
+                List.of(new InputParameter("orderId", ParameterType.STRING, false, ParameterLocation.PATH)),
+                List.of())));
+        assertEquals(ParameterLocation.PATH, catalog.find("crm").orElseThrow().operations().getFirst()
+                .inputParameters().getFirst().location());
+
+        catalog.saveOperation("crm", operation("https://new.example", List.of(
+                new InputParameter("name", ParameterType.STRING, false, ParameterLocation.QUERY)), List.of()));
+        PublishedOperation published = catalog.published("crm", "createLead").orElseThrow();
+        assertEquals("https://old.example", published.urlTemplate());
+        assertEquals("orderId", published.inputs().getFirst().name());
+        OperationView view = catalog.find("crm").orElseThrow().operations().getFirst();
+        assertEquals("name", view.inputParameters().getFirst().name());
+        assertEquals("orderId", view.publishedInputParameters().getFirst().name());
+        assertEquals(HttpMethod.POST, view.publishedMethod());
+        assertEquals("HTTP_ERROR", view.publishedBpmnErrorCode());
+    }
+
+    @Test
+    void deleteOperationRemovesTheDraftAndKeepsThePublishedSnapshot() {
+        var catalog = new InMemoryServiceCatalog();
+        catalog.saveService("crm", "CRM");
+        catalog.saveOperation("crm", operation("https://old.example"));
+        catalog.publish("crm");
+
+        catalog.deleteOperation("crm", "createLead");
+
+        assertTrue(catalog.find("crm").orElseThrow().operations().isEmpty());
+        assertEquals("https://old.example", catalog.published("crm", "createLead").orElseThrow().urlTemplate());
+        catalog.publish("crm");
+        assertTrue(catalog.published("crm", "createLead").isEmpty());
+    }
+
+    @Test
+    void deleteServiceRemovesTheDraftAndThePublication() {
+        var catalog = new InMemoryServiceCatalog();
+        catalog.saveService("crm", "CRM");
+        catalog.saveOperation("crm", operation("https://old.example"));
+        catalog.publish("crm");
+
+        catalog.deleteService("crm");
+
+        assertTrue(catalog.find("crm").isEmpty());
+        assertTrue(catalog.published("crm", "createLead").isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> catalog.deleteService("crm"));
+        assertThrows(IllegalArgumentException.class, () -> catalog.deleteOperation("crm", "createLead"));
+    }
+
+    @Test
+    void publishesBaseUrlAndSharedAuthWithoutChangingADraftEdit() {
+        var catalog = new InMemoryServiceCatalog();
+        catalog.saveService("crm", "CRM");
+        catalog.saveServiceSettings("crm", "CRM", "Khách hàng",
+                List.of(new EnvironmentBaseUrl("default", "https://crm.example")),
+                new AuthConfig(AuthType.BEARER, null, "published-secret"));
+        catalog.saveOperation("crm", operation("/leads"));
+        catalog.publish("crm");
+        // A later draft edit must not change the snapshot a process already published.
+        catalog.saveServiceSettings("crm", "CRM", "Nháp",
+                List.of(new EnvironmentBaseUrl("default", "https://draft.example")),
+                new AuthConfig(AuthType.NONE, null, null));
+
+        PublishedService published = catalog.publishedService("crm").orElseThrow();
+        assertEquals("https://crm.example", published.baseUrls().getFirst().url());
+        assertEquals("published-secret", published.sharedAuth().secret());
+        assertEquals("Nháp", catalog.find("crm").orElseThrow().description());
+    }
+
+    private static PublishedOperation operation(String url) {
+        return operation(url, List.of(), List.of());
+    }
+
+    private static PublishedOperation operation(String url, List<InputParameter> inputs, List<OutputParameter> outputs) {
+        return new PublishedOperation(
+                "createLead", HttpMethod.POST, url,
+                AuthType.NONE, null, null, null, 1000, List.of(), "HTTP_ERROR",
+                inputs, outputs);
+    }
+}

@@ -1,0 +1,137 @@
+spring:
+  application:
+    name: workflow-agent-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: ${WORKFLOW_DB_URL}
+    username: ${WORKFLOW_DB_USERNAME}
+    password: ${WORKFLOW_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    baseline-version: 0
+
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+flowable:
+  database-schema-update: false
+  async-executor-activate: true
+  check-process-definitions: false
+  eventregistry:
+    enable-change-detection: true
+    change-detection-delay: 10s
+
+workflow:
+  agent:
+    platform:
+      max-steps: ${WORKFLOW_AGENT_PLATFORM_MAX_STEPS:4}
+    provider:
+      egress:
+        allow-private-networks: ${WORKFLOW_AGENT_PROVIDER_ALLOW_PRIVATE_NETWORKS:false}
+        allow-http: ${WORKFLOW_AGENT_PROVIDER_ALLOW_HTTP:false}
+        maximum-response-bytes: ${WORKFLOW_AGENT_PROVIDER_MAXIMUM_RESPONSE_BYTES:1048576}
+    credentials:
+      master-key-base64: ${WORKFLOW_AGENT_CREDENTIAL_KEY_BASE64:${WORKFLOW_MASTER_KEY_BASE64:}}
+    worker:
+      enabled: ${WORKFLOW_AGENT_WORKER_ENABLED:true}
+      id: ${WORKFLOW_AGENT_WORKER_ID:local-worker}
+      poll-delay-ms: ${WORKFLOW_AGENT_WORKER_POLL_DELAY_MS:1000}
+      lease-seconds: ${WORKFLOW_AGENT_WORKER_LEASE_SECONDS:60}
+      max-attempts: ${WORKFLOW_AGENT_WORKER_MAX_ATTEMPTS:3}
+      max-running-per-tenant: ${WORKFLOW_AGENT_WORKER_MAX_RUNNING_PER_TENANT:2}
+      retry:
+        max-delay-seconds: ${WORKFLOW_AGENT_WORKER_RETRY_MAX_DELAY_SECONDS:30}
+        jitter-ratio: ${WORKFLOW_AGENT_WORKER_RETRY_JITTER_RATIO:0.25}
+      recovery-delay-ms: ${WORKFLOW_AGENT_WORKER_RECOVERY_DELAY_MS:10000}
+      execution-pool-size: ${WORKFLOW_AGENT_WORKER_EXECUTION_POOL_SIZE:2}
+      queue-capacity: ${WORKFLOW_AGENT_WORKER_QUEUE_CAPACITY:20}
+  service:
+    secrets:
+      master-key-base64: ${WORKFLOW_SERVICE_SECRET_KEY_BASE64:${WORKFLOW_MASTER_KEY_BASE64:}}
+  services:
+    environment: ${WORKFLOW_SERVICES_ENVIRONMENT:default}
+  definition:
+    max-bpmn-bytes: ${WORKFLOW_DEFINITION_MAX_BPMN_BYTES:2097152}
+  subprocess:
+    max-nesting-depth: ${WORKFLOW_SUBPROCESS_MAX_NESTING_DEPTH:3}
+    call-activity-enabled: ${WORKFLOW_SUBPROCESS_CALL_ACTIVITY_ENABLED:true}
+    max-call-depth: ${WORKFLOW_SUBPROCESS_MAX_CALL_DEPTH:5}
+    max-io-parameters: ${WORKFLOW_SUBPROCESS_MAX_IO_PARAMETERS:64}
+  script-task:
+    enabled: ${WORKFLOW_SCRIPT_TASK_ENABLED:true}
+    max-script-length: ${WORKFLOW_SCRIPT_TASK_MAX_SCRIPT_LENGTH:20000}
+    max-inputs: ${WORKFLOW_SCRIPT_TASK_MAX_INPUTS:32}
+    max-execution-millis: ${WORKFLOW_SCRIPT_TASK_MAX_EXECUTION_MILLIS:2000}
+    max-memory-bytes: ${WORKFLOW_SCRIPT_TASK_MAX_MEMORY_BYTES:8388608}
+    max-stack-depth: ${WORKFLOW_SCRIPT_TASK_MAX_STACK_DEPTH:64}
+    instruction-check-interval: ${WORKFLOW_SCRIPT_TASK_INSTRUCTION_CHECK_INTERVAL:100}
+  event-registry:
+    enabled: ${WORKFLOW_EVENT_REGISTRY_ENABLED:true}
+    max-body-bytes: ${WORKFLOW_EVENT_REGISTRY_MAX_BODY_BYTES:262144}
+    idempotency-retention: ${WORKFLOW_EVENT_REGISTRY_IDEMPOTENCY_RETENTION:7d}
+  runtime:
+    environment: ${WORKFLOW_ENV:production}
+  lock:
+    key-prefix: ${WORKFLOW_LOCK_KEY_PREFIX:workflow-agent-service}
+    wait-seconds: 3
+    ttl-seconds: 30
+  security:
+    enabled: true
+    master-key-base64: ${WORKFLOW_MASTER_KEY_BASE64:}
+    replay-window-seconds: 300
+    clock-skew-seconds: 30
+    nonce-cleanup-interval-ms: 600000
+    public-paths:
+      - /actuator/health
+      - /actuator/info
+      - /auth/login
+      - /auth/refresh
+      - /auth/logout
+      - /auth/csrf
+  auth:
+    # Sign-in is Keycloak SSO only (same realm as rsa-core-service). Requests carry the Keycloak
+    # access token (cookie or Bearer); roles come from its eim_roles claim (assigned in EIM), the
+    # tenant from the X-Tenant-Code header.
+    keycloak:
+      server-url: ${WORKFLOW_KEYCLOAK_SERVER_URL:}
+      realm: ${WORKFLOW_KEYCLOAK_REALM:rsa}
+      client-id: ${WORKFLOW_KEYCLOAK_CLIENT_ID:}
+      client-secret: ${WORKFLOW_KEYCLOAK_CLIENT_SECRET:}
+      issuer-uri: ${WORKFLOW_KEYCLOAK_ISSUER_URI:}
+      jwk-set-uri: ${WORKFLOW_KEYCLOAK_JWK_SET_URI:}
+      allowed-client-ids: ${WORKFLOW_KEYCLOAK_ALLOWED_CLIENT_IDS:}
+      auto-provision: ${WORKFLOW_KEYCLOAK_AUTO_PROVISION:true}
+      default-tenant-code: ${WORKFLOW_KEYCLOAK_DEFAULT_TENANT_CODE:default}
+    # EIM sitemap: the user's menu (GET /auth/sitemaps), as in rsa-core-service.
+    eim:
+      app-code: ${WORKFLOW_EIM_APP_CODE:VETC.WORKFLOW}
+      sitemap-path: /auth/sitemaps-for-role-prl
+    token:
+      cookie-secure: ${WORKFLOW_AUTH_COOKIE_SECURE:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  pattern:
+    level: "%5p [traceId=%X{traceId:-none}]"

@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: flow-admin-be
+
+server:
+  port: ${ADMIN_BE_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

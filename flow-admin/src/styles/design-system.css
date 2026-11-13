@@ -1,0 +1,684 @@
+/*
+ * Workflow Agent presentation standards.
+ * Keep product-wide component rules and tokens here; feature-specific layout
+ * stays with the owning feature and consumes these shared values.
+ */
+:root {
+  /* Product-wide visual tokens. Feature styles should consume these tokens
+   * instead of introducing page-local copies of the same colors and radii. */
+  /* Brand: rgb(1, 166, 81). White text on the raw brand green is only 3.2:1,
+   * so filled controls and green text use --color-primary (#018541, 5.2:1). */
+  --color-brand: #01a651;
+  --color-primary: #018541;
+  --color-primary-strong: #016b34;
+  --color-primary-soft: #e6f6ee;
+  --color-primary-border: #b3e4cb;
+  --color-agent-accent: #0f766e;
+  --color-agent-accent-soft: #e6f4f2;
+  --color-text: #1f2933;
+  --color-text-strong: #111827;
+  --color-text-muted: #5f6b7a;
+  --color-text-subtle: #7b8794;
+  --color-border: #e3e6ea;
+  --color-border-soft: #eceef1;
+  --color-border-strong: #cfd4da;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7f8f9;
+  --color-surface-hover: #f2f4f6;
+  --color-success: #15803d;
+  --color-success-soft: #ecf9f0;
+  --color-success-border: #b9e6c7;
+  --color-warning: #a85b08;
+  --color-warning-soft: #fff8e8;
+  --color-warning-border: #f5d99a;
+  --color-danger: #c2414b;
+  --color-danger-soft: #fff0f1;
+  --color-danger-border: #f5c2c7;
+  --color-info: #2563eb;
+  --color-info-soft: #eef4ff;
+  --color-canvas: #f6f7f8;
+  --color-focus-ring: rgba(1, 166, 81, 0.35);
+  --color-code-surface: #f3f4f6;
+  --color-sidebar: #ffffff;
+  --color-sidebar-muted: #5f6b7a;
+  --color-sidebar-active: #018541;
+  --font-display: Inter, 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+  --font-body: Inter, 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', Consolas, 'Courier New', monospace;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  /* Flat surfaces: separation comes from 1px borders, not elevation.
+   * Only floating layers (menus, dialogs) keep a light shadow. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --shadow-panel: none;
+  --shadow-popover: 0 4px 12px rgba(17, 24, 39, 0.08);
+  --shadow-dialog: 0 8px 24px rgba(17, 24, 39, 0.12);
+  --el-color-primary: #018541;
+  --el-color-primary-light-3: #4dc185;
+  --el-color-primary-light-5: #80d3a8;
+  --el-color-primary-light-7: #b3e4cb;
+  --el-color-primary-light-8: #ccedde;
+  --el-color-primary-light-9: #e6f6ee;
+  --el-color-primary-dark-2: #016b34;
+  /* Element Plus semantic colors. Its defaults (#67c23a, #e6a23c, #f56c6c)
+   * are too light for text on white, so map them to the product tokens. */
+  --el-color-success: var(--color-success);
+  --el-color-success-light-3: #5ba677;
+  --el-color-success-light-5: #8ac09e;
+  --el-color-success-light-7: var(--color-success-border);
+  --el-color-success-light-8: #d3eedc;
+  --el-color-success-light-9: var(--color-success-soft);
+  --el-color-success-dark-2: #116631;
+  --el-color-warning: var(--color-warning);
+  --el-color-warning-light-3: #c28c52;
+  --el-color-warning-light-5: #d4ad84;
+  --el-color-warning-light-7: var(--color-warning-border);
+  --el-color-warning-light-8: #fbeccb;
+  --el-color-warning-light-9: var(--color-warning-soft);
+  --el-color-warning-dark-2: #864906;
+  --el-color-danger: var(--color-danger);
+  --el-color-danger-light-3: #d47a81;
+  --el-color-danger-light-5: #e1a0a5;
+  --el-color-danger-light-7: var(--color-danger-border);
+  --el-color-danger-light-8: #fadadd;
+  --el-color-danger-light-9: var(--color-danger-soft);
+  --el-color-danger-dark-2: #9b343c;
+  --el-color-error: var(--color-danger);
+  --el-color-info: var(--color-text-muted);
+  --el-color-info-light-3: #8f98a2;
+  --el-color-info-light-5: #afb5bd;
+  --el-color-info-light-7: var(--color-border-strong);
+  --el-color-info-light-8: var(--color-border);
+  --el-color-info-light-9: var(--color-surface-muted);
+  --el-color-info-dark-2: #4c5662;
+  --el-border-radius-base: var(--radius-md);
+  --el-border-radius-small: var(--radius-sm);
+  --el-border-color: var(--color-border-strong);
+  --el-border-color-light: var(--color-border);
+  --el-border-color-lighter: var(--color-border-soft);
+  --el-box-shadow: var(--shadow-dialog);
+  --el-box-shadow-light: var(--shadow-popover);
+  --el-box-shadow-lighter: var(--shadow-popover);
+  --el-box-shadow-dark: var(--shadow-dialog);
+  --el-text-color-primary: var(--color-text);
+  --el-text-color-regular: var(--color-text);
+  --el-text-color-secondary: var(--color-text-muted);
+  --el-text-color-placeholder: var(--color-text-subtle);
+  --el-fill-color-light: var(--color-surface-muted);
+  --el-fill-color-lighter: var(--color-surface-muted);
+  --control-height: 36px;
+  --control-height-small: 32px;
+  --control-height-large: 40px;
+  --control-radius: 6px;
+  --control-border: var(--color-border-strong);
+  --control-border-hover: #aeb5be;
+  --control-focus: var(--color-brand);
+  --control-focus-ring: rgba(1, 166, 81, 0.16);
+  --control-placeholder: var(--color-text-subtle);
+  --panel-radius: var(--radius-lg);
+}
+
+/* Shared interaction baseline. Feature styles should add layout only. */
+:where(button, [role='button'], a, input, textarea, select):focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+:where(.el-button, .el-select, .el-input, .el-input-number):focus-within {
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Element Plus control baseline */
+.el-input__wrapper,
+.el-select__wrapper {
+  min-height: var(--control-height);
+  align-items: center;
+  border-radius: var(--control-radius);
+  background-color: var(--color-surface);
+  box-shadow: 0 0 0 1px var(--control-border) inset;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.el-input__wrapper:hover,
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--control-border-hover) inset;
+}
+
+.el-input__wrapper.is-focus,
+.el-input__wrapper:focus-within,
+.el-select__wrapper.is-focused,
+.el-select__wrapper:focus-within {
+  box-shadow:
+    0 0 0 1px var(--control-focus) inset,
+    0 0 0 3px var(--control-focus-ring);
+}
+
+.el-input__inner,
+.el-select__selected-item {
+  color: var(--color-text);
+  font-weight: 500;
+  line-height: calc(var(--control-height) - 2px);
+}
+
+.el-input__inner[readonly] {
+  cursor: default;
+}
+
+.el-input__inner::placeholder,
+.el-select__placeholder {
+  color: var(--control-placeholder);
+}
+
+.el-input.is-disabled .el-input__wrapper,
+.el-select.is-disabled .el-select__wrapper {
+  background-color: var(--color-surface-muted);
+  box-shadow: 0 0 0 1px var(--color-border) inset;
+}
+
+.el-input.is-disabled .el-input__inner,
+.el-select.is-disabled .el-select__selected-item {
+  color: var(--color-text-muted);
+  -webkit-text-fill-color: var(--color-text-muted);
+}
+
+.el-input-number {
+  width: 100%;
+}
+
+.el-input-number .el-input__wrapper {
+  border-radius: var(--control-radius);
+}
+
+/* Table contract: text is left aligned; semantic tags own their alignment. */
+.el-table th.el-table__cell > .cell {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: left;
+}
+
+.el-table th.el-table__cell.is-center > .cell {
+  text-align: center;
+}
+
+.el-table td.el-table__cell > .cell {
+  min-height: 25px;
+  display: flex;
+  align-items: center;
+  line-height: 1.45;
+}
+
+.el-table td.el-table__cell.is-center > .cell {
+  justify-content: center;
+}
+
+.table-pagination {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: 10px var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.table-pagination .el-pagination__total {
+  color: var(--color-text-muted);
+}
+
+.table-pagination .el-pager li,
+.table-pagination button,
+.table-pagination .el-select__wrapper {
+  border-radius: var(--radius-sm);
+}
+
+.table-panel,
+.agent-table-panel {
+  min-height: 360px;
+}
+
+@media (max-width: 840px) {
+  .table-panel,
+  .agent-table-panel {
+    overflow-x: auto;
+  }
+
+  .table-pagination {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
+/* Workflow canvas refinement: calm surfaces, clear hierarchy, one process signal. */
+.content {
+  background: var(--color-canvas);
+}
+
+.page-stack,
+.management-page {
+  gap: 18px;
+}
+
+.page-hero {
+  border-radius: var(--panel-radius);
+  background: var(--color-surface);
+  box-shadow: none;
+}
+
+.page-hero::after {
+  display: none;
+}
+
+.metric-card,
+.page-actions,
+.table-panel,
+.agent-table-panel {
+  border-radius: var(--panel-radius);
+  box-shadow: none;
+}
+
+.metric-card {
+  padding: 16px 18px;
+}
+
+.metric-card strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.page-actions {
+  padding: 14px 16px 2px;
+}
+
+.el-table {
+  --el-table-header-bg-color: var(--color-surface-muted);
+  --el-table-row-hover-bg-color: var(--color-surface-hover);
+  --el-table-border-color: var(--color-border-soft);
+  color: var(--color-text);
+}
+
+.el-table th.el-table__cell {
+  height: 44px;
+  background: var(--color-surface-muted);
+}
+
+.el-table td.el-table__cell {
+  height: 58px;
+}
+
+.el-table .el-table__row:last-child td.el-table__cell {
+  border-bottom: 0;
+}
+
+.el-tabs__item {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.el-tabs__item.is-active {
+  color: var(--color-primary);
+}
+
+.el-button:not(.is-link) {
+  box-shadow: none;
+}
+
+.state-history-panel {
+  position: relative;
+  padding-left: 18px;
+  border-left: 3px solid var(--color-brand);
+  background: var(--color-surface);
+}
+
+.state-history-guide {
+  margin-left: 0;
+}
+
+.state-history-timeline {
+  padding-left: 4px;
+}
+
+@media (max-width: 840px) {
+  .page-stack,
+  .management-page {
+    gap: 14px;
+  }
+
+  .page-hero,
+  .metric-card,
+  .page-actions,
+  .table-panel,
+  .agent-table-panel {
+    border-radius: var(--radius-md);
+  }
+}
+
+.el-textarea__inner {
+  border: 0;
+  border-radius: var(--control-radius);
+  box-shadow: 0 0 0 1px var(--control-border) inset;
+  transition: box-shadow 160ms ease;
+}
+
+.el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px var(--control-border-hover) inset;
+}
+
+.el-textarea__inner:focus {
+  box-shadow:
+    0 0 0 1px var(--control-focus) inset,
+    0 0 0 3px var(--control-focus-ring);
+}
+
+/* Teleported menus */
+.el-select__popper.el-popper,
+.tenant-switcher-dropdown.el-popper {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+}
+
+.el-select__popper .el-select-dropdown__list,
+.tenant-switcher-dropdown .el-select-dropdown__list {
+  padding: 6px;
+}
+
+.el-select__popper .el-select-dropdown__item,
+.tenant-switcher-dropdown .el-select-dropdown__item {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 11px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  line-height: 38px;
+}
+
+.el-select__popper .el-select-dropdown__item.is-hovering,
+.tenant-switcher-dropdown .el-select-dropdown__item.is-hovering {
+  background: var(--color-surface-hover);
+}
+
+.el-select__popper .el-select-dropdown__item.is-selected,
+.tenant-switcher-dropdown .el-select-dropdown__item.is-selected {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  font-weight: 600;
+}
+
+.el-dropdown__popper.el-popper {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+}
+
+.el-dropdown-menu {
+  padding: 6px;
+}
+
+.el-dropdown-menu__item {
+  min-height: 38px;
+  border-radius: var(--radius-sm);
+}
+
+.user-account-dropdown .el-dropdown-menu {
+  width: 100%;
+}
+
+.user-account-dropdown .user-account-summary.is-disabled {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  color: var(--color-text);
+  background: var(--color-surface-muted);
+  cursor: default;
+  opacity: 1;
+}
+
+.user-dropdown-avatar {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.user-dropdown-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+}
+
+.user-dropdown-copy strong,
+.user-dropdown-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-dropdown-copy strong {
+  color: var(--color-text);
+  font-size: 12px;
+}
+
+.user-dropdown-copy small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.user-account-dropdown .el-dropdown-menu__item.is-divided {
+  margin-top: 6px;
+  border-top-color: var(--color-border-soft);
+}
+
+/* Data presentation */
+.el-table {
+  --el-table-header-bg-color: var(--color-surface-muted);
+  --el-table-row-hover-bg-color: var(--color-surface-hover);
+  --el-table-border-color: var(--color-border-soft);
+  --el-table-header-text-color: var(--color-text-muted);
+  --el-table-text-color: var(--color-text);
+}
+
+.el-table th.el-table__cell {
+  height: 44px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.el-table td.el-table__cell {
+  height: 52px;
+}
+
+.el-tag {
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+}
+
+.el-dialog {
+  max-width: calc(100vw - 32px);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--shadow-dialog);
+}
+
+.el-dialog__header {
+  padding: 20px 22px 14px;
+}
+
+.el-dialog__body {
+  padding: 8px 22px 20px;
+}
+
+.el-dialog__footer {
+  padding: 14px 22px 20px;
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.dialog-form .el-input,
+.dialog-form .el-select,
+.dialog-form .el-input-number,
+.rule-form .el-input,
+.rule-form .el-select,
+.rule-form .el-input-number {
+  width: 100%;
+}
+
+/* Shared search and action layout */
+.page-actions.compact-filter {
+  min-width: 0;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 16px 18px;
+}
+
+.filter-form.el-form--inline,
+.filter-form.el-form--inline.el-form--label-top {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 12px 14px;
+}
+
+.filter-form.el-form--inline .el-form-item,
+.filter-form.el-form--inline .el-form-item.el-form-item--label-top {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.filter-form .el-form-item__label,
+.filter-form .el-form-item--label-top .el-form-item__label {
+  width: auto;
+  height: auto;
+  flex: none;
+  justify-content: flex-start;
+  line-height: 1.3;
+  margin-bottom: 0;
+  padding: 0 0 6px;
+  text-align: left;
+}
+
+.filter-form .el-form-item__content {
+  min-width: 0;
+}
+
+.filter-form .el-input__wrapper,
+.filter-form .el-select__wrapper {
+  min-height: var(--control-height);
+}
+
+.filter-form .el-form-item.filter-form__actions {
+  width: auto;
+  min-width: max-content;
+  align-self: end;
+  justify-self: end;
+}
+
+.filter-form .filter-form__actions .el-form-item__content {
+  justify-content: flex-end;
+}
+
+.filter-form--definitions.el-form--inline {
+  grid-template-columns: minmax(220px, 1.2fr) minmax(210px, 1fr) minmax(168px, 0.65fr) max-content;
+}
+
+.filter-form--tenants.el-form--inline {
+  grid-template-columns: minmax(240px, 1fr) minmax(150px, 0.55fr) max-content;
+}
+
+.filter-form--assignment.el-form--inline,
+.filter-form--instances.el-form--inline {
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.page-primary-action,
+.page-primary-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.table-pagination .el-select__wrapper {
+  min-height: var(--control-height-small);
+  border-radius: var(--control-radius);
+}
+
+@media (max-width: 1180px) {
+  .filter-form--definitions.el-form--inline,
+  .filter-form--tenants.el-form--inline {
+    grid-template-columns: repeat(2, minmax(190px, 1fr));
+  }
+
+  .filter-form--definitions .filter-form__actions,
+  .filter-form--tenants .filter-form__actions {
+    grid-column: -2 / -1;
+  }
+
+  .page-primary-actions,
+  .page-primary-action {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 840px) {
+  .filter-form.el-form--inline,
+  .filter-form--definitions.el-form--inline,
+  .filter-form--tenants.el-form--inline,
+  .filter-form--assignment.el-form--inline,
+  .filter-form--instances.el-form--inline {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filter-form .el-form-item.filter-form__actions {
+    width: 100%;
+    min-width: 0;
+    grid-column: auto;
+    justify-self: stretch;
+  }
+
+  .filter-form .filter-form__actions .el-form-item__content,
+  .filter-form .filter-form__actions .filter-actions {
+    width: 100%;
+  }
+
+  .filter-form .filter-form__actions .el-button {
+    flex: 1;
+  }
+
+  .page-primary-action,
+  .page-primary-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+}

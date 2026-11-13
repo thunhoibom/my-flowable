@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="$PROJECT_DIR$/flow-admin" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/flow-admin-be" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/flow-engine" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/workflow-agent" vcs="Git" />
+  </component>
+</project>
