@@ -12,22 +12,22 @@ import type {
 } from './types'
 
 const ROOT = '/workflow/management/process'
+/** Admin API of Flow Engine: what is deployed. */
+const DEPLOYED = '/api/admin/process-definitions'
 const key = (processDefinitionKey: string) => encodeURIComponent(processDefinitionKey)
 
 export const definitionApi = {
   page: (params: DefinitionPageQuery) =>
     adminBeClient.get<PageResult<ProcessDefinitionSummary>>(`${ROOT}/definitions/page`, { params }),
-  listProcesses: () => apiClient.get<ProcessDefinition[]>(`${ROOT}/definitions`),
+  listProcesses: () => apiClient.get<ProcessDefinition[]>(DEPLOYED),
   listVersions: (processDefinitionKey: string) =>
-    apiClient.get<ProcessDefinition[]>(`${ROOT}/definitions`, {
-      params: { processDefinitionKey },
-    }),
+    apiClient.get<ProcessDefinition[]>(DEPLOYED, { params: { processDefinitionKey } }),
   detail: (processDefinitionKey: string, version?: number) =>
-    apiClient.get<ProcessDefinition>(`${ROOT}/definition`, {
-      params: { processDefinitionKey, version },
+    apiClient.get<ProcessDefinition>(`${DEPLOYED}/${key(processDefinitionKey)}`, {
+      params: { version },
     }),
   exists: (processDefinitionKey: string) =>
-    apiClient.get<boolean>(`${ROOT}/definition/exists`, { params: { processDefinitionKey } }),
+    apiClient.get<boolean>(`${DEPLOYED}/${key(processDefinitionKey)}/exists`),
   /** CI path: overwrite the draft and publish at once. The designer uses saveDraft + publish. */
   deploy: (payload: {
     processDefinitionKey: string
@@ -70,10 +70,10 @@ export const definitionApi = {
     adminBeClient.post<ProcessRelease>(`${ROOT}/${key(processDefinitionKey)}/resume`),
   /** Published processes that call this one ("where used"). */
   callers: (processDefinitionKey: string) =>
-    apiClient.get<ProcessReference[]>(`${ROOT}/${key(processDefinitionKey)}/callers`),
+    apiClient.get<ProcessReference[]>(`${DEPLOYED}/${key(processDefinitionKey)}/callers`),
   /** Processes that the latest version of this one calls. */
   callees: (processDefinitionKey: string) =>
-    apiClient.get<ProcessReference[]>(`${ROOT}/${key(processDefinitionKey)}/callees`),
+    apiClient.get<ProcessReference[]>(`${DEPLOYED}/${key(processDefinitionKey)}/callees`),
   releases: (processDefinitionKey: string) =>
     adminBeClient.get<ProcessRelease[]>(`${ROOT}/${key(processDefinitionKey)}/releases`),
 
@@ -87,7 +87,5 @@ export const definitionApi = {
   deleteAll: (processDefinitionKey: string) =>
     adminBeClient.delete<void>(`${ROOT}/definition`, { params: { processDefinitionKey } }),
   deleteVersion: (processDefinitionKey: string, version: number) =>
-    apiClient.delete<void>(`${ROOT}/definition/version`, {
-      params: { processDefinitionKey, version },
-    }),
+    apiClient.delete<void>(`${DEPLOYED}/${key(processDefinitionKey)}/versions/${version}`),
 }

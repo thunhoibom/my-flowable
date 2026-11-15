@@ -33,6 +33,11 @@ export const queryKeys = {
     [...queryKeys.tenantMembers(tenantCode), keyword] as const,
   directoryUsers: (tenantCode: string, parameters: QueryParameters) =>
     [...tenantScope(tenantCode), 'directory-users', 'page', parameters] as const,
+  failedJobs: (tenantCode: string) => [...tenantScope(tenantCode), 'failed-jobs'] as const,
+  failedJobPage: (tenantCode: string, parameters: QueryParameters) =>
+    [...queryKeys.failedJobs(tenantCode), 'page', parameters] as const,
+  serviceEnvironments: (tenantCode: string) =>
+    [...tenantScope(tenantCode), 'service-environments'] as const,
   sitemap: (userId: string) => ['session', userId, 'sitemap'] as const,
   tenants: () => ['platform', 'tenants'] as const,
   tenantPage: (parameters: QueryParameters) =>

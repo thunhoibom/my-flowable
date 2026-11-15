@@ -388,12 +388,15 @@ public class ServiceCatalogController {
                 .toList();
     }
 
-    /** Publishes the catalog entry and writes its environment settings to Flow Engine, both or neither. */
+    /**
+     * Publishes the catalog entry. The first publish also writes its environment settings to Flow Engine (both or
+     * neither); later ones leave them to Hub.
+     */
     @PostMapping("/{serviceKey}/publish")
     @Transactional(rollbackFor = Exception.class)
     public ApiResponse<Void> publish(@PathVariable String serviceKey) {
         catalog.publish(serviceKey);
-        environmentSync.push(serviceKey);
+        environmentSync.seed(serviceKey);
         return ApiResponse.ok();
     }
 

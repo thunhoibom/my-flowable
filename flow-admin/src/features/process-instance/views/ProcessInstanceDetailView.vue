@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Ban, Check, RefreshCw, RotateCcw, Send } from '@lucide/vue'
+import { ArrowLeft, Ban, Check, RefreshCw, RotateCcw, Send, UserRoundPen } from '@lucide/vue'
 import { getErrorMessage } from '@/api/http'
 import { queryKeys } from '@/api/queryKeys'
 import ListEmptyState from '@/components/ListEmptyState.vue'
@@ -48,6 +48,8 @@ const activeTab = ref('diagram')
 const taskPage = reactive({ pageNum: 1, pageSize: 10 })
 const variablePage = reactive({ pageNum: 1, pageSize: 10 })
 const transferVisible = ref(false)
+/** 'reassign': an admin hands over a task he does not hold (Admin API). */
+const transferMode = ref<'transfer' | 'reassign'>('transfer')
 const decisionVisible = ref(false)
 const decisionType = ref<'approve' | 'reject'>('approve')
 const selectedTask = ref<TaskItem>()
@@ -108,6 +110,7 @@ const terminateMutation = useMutation({
 const transferMutation = useMutation({
   mutationFn: () => {
     const task = selectedTask.value
+    if (task && transferMode.value === 'reassign') return reassign(task)
     if (!task || !canActOnTask(task))
       throw new Error('Người dùng hiện tại không thao tác được nhiệm vụ này')
     const targetCount = [
@@ -128,7 +131,9 @@ const transferMutation = useMutation({
   },
   onSuccess: async () => {
     transferVisible.value = false
-    ElMessage.success('Đã chuyển giao nhiệm vụ')
+    ElMessage.success(
+      transferMode.value === 'reassign' ? 'Đã giao lại nhiệm vụ' : 'Đã chuyển giao nhiệm vụ',
+    )
     await refresh()
   },
   onError: (error) => ElMessage.error(getErrorMessage(error)),
@@ -202,7 +207,21 @@ async function terminate() {
   if (!reason) return
   terminateMutation.mutate(reason)
 }
-function openTransfer(task: TaskItem) {
+function reassign(task: TaskItem) {
+  const targetAssignee = transferForm.targetAssignee.trim()
+  const targetCandidateUsers = splitValues(transferForm.targetCandidateUsers)
+  if (Boolean(targetAssignee) === targetCandidateUsers.length > 0)
+    throw new Error('Hãy điền người nhận hoặc người có thể nhận, không điền cả hai')
+  const reason = transferForm.comment.trim()
+  if (!reason) throw new Error('Hãy nhập lý do giao lại')
+  return processInstanceApi.reassign(task.taskId, {
+    targetAssignee: targetAssignee || undefined,
+    targetCandidateUsers,
+    reason,
+  })
+}
+function openTransfer(task: TaskItem, mode: 'transfer' | 'reassign' = 'transfer') {
+  transferMode.value = mode
   selectedTask.value = task
   Object.assign(transferForm, {
     targetAssignee: '',
@@ -423,7 +442,7 @@ async function confirmDecision() {
               ><template #default="{ row }">{{
                 formatDuration(row.durationInMillis)
               }}</template></el-table-column
-            ><el-table-column v-if="canOperateInstances" label="Thao tác" width="340" fixed="right"
+            ><el-table-column v-if="canOperateInstances" label="Thao tác" width="430" fixed="right"
               ><template #default="{ row }">
                 <el-tooltip
                   :disabled="canActOnTask(row)"
@@ -453,6 +472,14 @@ async function confirmDecision() {
                     >
                   </span>
                 </el-tooltip>
+                <el-button
+                  link
+                  type="danger"
+                  :disabled="!isActiveTask(row)"
+                  title="Giao nhiệm vụ cho người khác, dù ai đang giữ"
+                  @click="openTransfer(row, 'reassign')"
+                  ><UserRoundPen :size="15" />Giao lại</el-button
+                >
               </template></el-table-column
             ><template #empty>
               <ListEmptyState
@@ -519,7 +546,10 @@ async function confirmDecision() {
         title="Việc sẽ trả về bước cần người đầu tiên."
       />
       <el-form class="dialog-form" label-position="top">
-        <el-form-item label="Ghi chú">
+        <el-form-item
+          :label="transferMode === 'reassign' ? 'Lý do' : 'Ghi chú'"
+          :required="transferMode === 'reassign'"
+        >
           <el-input
             v-model="decisionForm.comment"
             type="textarea"
@@ -558,11 +588,19 @@ async function confirmDecision() {
       </template>
     </el-dialog>
 
-    <el-dialog v-model="transferVisible" title="Chuyển việc" width="min(560px, calc(100vw - 32px))">
+    <el-dialog
+      v-model="transferVisible"
+      :title="transferMode === 'reassign' ? 'Giao lại nhiệm vụ' : 'Chuyển việc'"
+      width="min(560px, calc(100vw - 32px))"
+    >
       <el-alert
         type="info"
         :closable="false"
-        title="Chọn một người nhận, hoặc một nhóm có thể nhận."
+        :title="
+          transferMode === 'reassign'
+            ? 'Giao cho một người, hoặc cho nhiều người có thể nhận. Người đang giữ sẽ mất nhiệm vụ.'
+            : 'Chọn một người nhận, hoặc một nhóm có thể nhận.'
+        "
       />
       <el-form class="dialog-form" label-position="top">
         <el-form-item label="Người nhận"
@@ -575,7 +613,7 @@ async function confirmDecision() {
             :rows="2"
             placeholder="Nhiều tài khoản, cách nhau bởi dấu phẩy hoặc xuống dòng"
         /></el-form-item>
-        <el-form-item label="Nhóm có thể nhận"
+        <el-form-item v-if="transferMode === 'transfer'" label="Nhóm có thể nhận"
           ><el-input
             v-model="transferForm.targetCandidateGroups"
             type="textarea"
@@ -597,7 +635,7 @@ async function confirmDecision() {
           type="primary"
           :loading="transferMutation.isPending.value"
           @click="transferMutation.mutate()"
-          >Chuyển</el-button
+          >{{ transferMode === 'reassign' ? 'Giao lại' : 'Chuyển' }}</el-button
         ></template
       >
     </el-dialog>

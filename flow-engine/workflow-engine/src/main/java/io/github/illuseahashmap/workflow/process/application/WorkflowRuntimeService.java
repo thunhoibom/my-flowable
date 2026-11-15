@@ -5,6 +5,7 @@ import io.github.illuseahashmap.workflow.process.application.dto.ApproveTaskResu
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessStatusView;
 import io.github.illuseahashmap.workflow.process.application.dto.ParticipantRequirementView;
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessParticipantRequirementsRequest;
+import io.github.illuseahashmap.workflow.process.application.dto.ReassignTaskRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.RejectTaskRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.StartProcessRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.StartProcessResult;
@@ -34,4 +35,7 @@ public interface WorkflowRuntimeService {
     ApproveTaskResult reject(RejectTaskRequest request);
 
     TaskView transfer(TransferTaskRequest request);
+
+    /** Admin API: like {@link #transfer} but the caller does not have to hold the task. */
+    TaskView reassign(String taskId, ReassignTaskRequest request);
 }

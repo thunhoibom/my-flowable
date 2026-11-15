@@ -34,7 +34,7 @@ Hướng chung: bám chuẩn Flowable Enterprise (Events & Channels), trên engi
 
 ## 1. Flowable Enterprise có những gì
 
-Nguồn là trang tham chiếu của Flowable Design (React modeler). Các trang này chỉ liệt kê thuộc tính trên giao diện, không có tên attribute XML hay API.
+Nguồn là trang tham chiếu của Flowable Design. Các trang này chỉ liệt kê thuộc tính trên giao diện, không có tên attribute XML hay API.
 
 | Phần tử | Cách tiếp tục | Thuộc tính riêng đáng chú ý |
 |---|---|---|

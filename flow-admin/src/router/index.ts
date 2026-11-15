@@ -72,6 +72,32 @@ const router = createRouter({
           },
         },
         {
+          path: 'failed-jobs',
+          name: 'failed-jobs',
+          component: () => import('@/features/failed-job/views/FailedJobListView.vue'),
+          meta: {
+            title: 'Job lỗi',
+            requiredAnyRoles: ROLES.anyUser,
+            navigation: { menuCode: 'WF_JOB', label: 'Job lỗi', icon: 'failedJobs', order: 25 },
+          },
+        },
+        {
+          path: 'service-environments',
+          name: 'service-environments',
+          component: () =>
+            import('@/features/service-environment/views/ServiceEnvironmentView.vue'),
+          meta: {
+            title: 'Cấu hình môi trường',
+            requiredAnyRoles: ROLES.designers,
+            navigation: {
+              menuCode: 'WF_ENVIRONMENT',
+              label: 'Cấu hình môi trường',
+              icon: 'environments',
+              order: 37,
+            },
+          },
+        },
+        {
           path: 'services',
           name: 'service-catalog',
           component: () => import('@/features/service-registry/ServiceCatalogView.vue'),

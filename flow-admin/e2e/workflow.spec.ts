@@ -95,7 +95,7 @@ async function mockApi(page: Page) {
         ]
       } else if (url.pathname.endsWith('/task/interaction')) {
         data = { fields: [], agentActivityIds: [] }
-      } else if (url.pathname.endsWith('/auth/directory/users')) {
+      } else if (url.pathname.endsWith('/directory/users')) {
         data = {
           total: 2,
           pageNum: 1,
@@ -322,7 +322,7 @@ async function mockApi(page: Page) {
           highlightedFlows: ['flow1'],
           activityDetails: {},
         }
-      } else if (url.pathname.endsWith('/instance/detail')) {
+      } else if (/\/api\/admin\/process-instances\/[^/]+$/.test(url.pathname)) {
         data = {
           instance: {
             processInstanceId: 'instance-200',
@@ -349,7 +349,7 @@ async function mockApi(page: Page) {
           ],
           variables: [],
         }
-      } else if (url.pathname.endsWith('/instances/page')) {
+      } else if (url.pathname.endsWith('/api/admin/process-instances')) {
         data = {
           total: 1,
           pageNum: 1,
@@ -365,9 +365,9 @@ async function mockApi(page: Page) {
             },
           ],
         }
-      } else if (url.pathname.endsWith('/node-assignment-rule')) {
+      } else if (url.pathname.endsWith('/api/admin/assignment-rules')) {
         data = { total: 0, pageNum: 1, pageSize: 20, records: [] }
-      } else if (url.pathname.endsWith('/tenant')) {
+      } else if (url.pathname.endsWith('/api/admin/tenants')) {
         data = {
           total: 1,
           pageNum: 1,
@@ -382,7 +382,7 @@ async function mockApi(page: Page) {
             },
           ],
         }
-      } else if (url.pathname.endsWith('/definition')) {
+      } else if (/\/api\/admin\/process-definitions\/[^/]+$/.test(url.pathname)) {
         data = {
           processDefinitionId: 'expense:2:100',
           processDefinitionKey: 'expense_approval',
@@ -402,7 +402,7 @@ async function mockApi(page: Page) {
               </process>
             </definitions>`,
         }
-      } else if (url.pathname.endsWith('/definitions')) {
+      } else if (url.pathname.endsWith('/api/admin/process-definitions')) {
         data = [
           {
             processDefinitionId: 'expense:2:100',
@@ -744,7 +744,7 @@ test('queries tenant users when configuring an assignment rule', async ({ page }
   await picker.getByPlaceholder('Tìm tên đăng nhập hoặc tên hiển thị').fill('alice')
   const searchRequest = page.waitForRequest(
     (request) =>
-      request.url().includes('/auth/directory/users') &&
+      request.url().includes('/api/admin/directory/users') &&
       new URL(request.url()).searchParams.get('keyword') === 'alice',
   )
   await picker.getByRole('button', { name: 'Tìm kiếm' }).click()
@@ -754,7 +754,7 @@ test('queries tenant users when configuring an assignment rule', async ({ page }
   await expect(dialog.getByText('alice', { exact: true })).toBeVisible()
 
   const saveRequest = page.waitForRequest((request) =>
-    request.url().endsWith('/workflow/node-assignment-rule'),
+    request.url().endsWith('/api/admin/assignment-rules'),
   )
   await dialog.getByRole('button', { name: 'Lưu' }).click()
   expect((await saveRequest).postDataJSON()).toMatchObject({

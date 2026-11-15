@@ -134,6 +134,27 @@ class AuthenticationHttpIntegrationTest {
     }
 
     @Test
+    void adminApiChecksTheUserRoles() throws Exception {
+        mockMvc.perform(get("/api/admin/process-instances").with(bearer("viewer")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/failed-jobs").with(bearer("viewer")))
+                .andExpect(status().isOk());
+        // A bearer token is not sent cross-site, so Admin API writes need no CSRF token; the role still applies.
+        mockMvc.perform(post("/api/admin/failed-jobs/missing/retry").with(bearer("viewer")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/admin/failed-jobs/missing/retry").with(bearer("designer")))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/admin/members").with(bearer("designer")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/admin/members").with(bearer("platform")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/tenants").with(bearer("platform")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/process-instances").with(bearer("rsa-only")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void menuComesFromTheEimSitemap() throws Exception {
         mockMvc.perform(get("/auth/sitemaps").with(bearer("designer")))
                 .andExpect(status().isOk())

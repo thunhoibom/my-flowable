@@ -161,17 +161,31 @@ public class FlowEngineClient {
 
     /** {@code PUT /api/admin/service-environments/{key}} as the current user, in the current tenant. */
     public void saveServiceEnvironment(String serviceKey, Map<String, Object> settings) {
+        byte[] body = write(settings);
+        send(asUser("/api/admin/service-environments/" + encode(serviceKey))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofByteArray(body))
+                .build(), json.constructType(Void.class));
+    }
+
+    /** Whether the service already has settings on Flow Engine ({@code GET /api/admin/service-environments/{key}}). */
+    public boolean hasServiceEnvironment(String serviceKey) {
+        return optional(() -> {
+            send(asUser("/api/admin/service-environments/" + encode(serviceKey)).GET().build(),
+                    json.constructType(Void.class));
+            return Boolean.TRUE;
+        }).isPresent();
+    }
+
+    /** Admin API request carrying the current user's token and tenant. */
+    private HttpRequest.Builder asUser(String path) {
         String token = UserToken.current();
         if (token == null) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "Missing user token");
         }
-        byte[] body = write(settings);
-        send(request("/api/admin/service-environments/" + encode(serviceKey))
+        return request(path)
                 .header("Authorization", "Bearer " + token)
-                .header(TENANT_HEADER, TenantContext.current().tenantCode())
-                .header("Content-Type", "application/json")
-                .PUT(HttpRequest.BodyPublishers.ofByteArray(body))
-                .build(), json.constructType(Void.class));
+                .header(TENANT_HEADER, TenantContext.current().tenantCode());
     }
 
     // ---- plumbing ---------------------------------------------------------------------------------------------

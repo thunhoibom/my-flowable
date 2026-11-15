@@ -21,6 +21,8 @@ import {
   UserRound,
   Workflow,
   X,
+  TriangleAlert,
+  ServerCog,
 } from '@lucide/vue'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -59,6 +61,8 @@ const navigationIcons: Record<NavigationIcon, Component> = {
   events: RadioTower,
   access: UsersRound,
   tenants: Building2,
+  failedJobs: TriangleAlert,
+  environments: ServerCog,
 }
 
 watch(

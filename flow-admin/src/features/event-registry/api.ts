@@ -88,7 +88,8 @@ export interface EventUsagesView {
 }
 
 const EVENTS = '/workflow/management/event-registry/events'
-const WAITS = '/workflow/management/event-registry/waits'
+/** Admin API of Flow Engine: runtime facts about an event key. */
+const ADMIN_EVENTS = '/api/admin/events'
 const CHANNELS = '/workflow/management/event-registry/channels'
 
 const eventPath = (key: string) => `${EVENTS}/${encodeURIComponent(key)}`
@@ -101,9 +102,15 @@ export const eventRegistryApi = {
   publishEvent: (key: string, revision: number) =>
     adminBeClient.post<EventModelView>(`${eventPath(key)}/publish`, null, { params: { revision } }),
   deleteEvent: (key: string) => adminBeClient.delete<void>(eventPath(key)),
-  usages: (key: string) => apiClient.get<EventUsagesView>(`${eventPath(key)}/usages`),
+  usages: (key: string) =>
+    apiClient.get<EventUsagesView>(`${ADMIN_EVENTS}/${encodeURIComponent(key)}/usages`),
   waits: (eventKey: string, page: number, size: number) =>
-    apiClient.get<PageResult<EventWaitView>>(WAITS, { params: { eventKey, page, size } }),
+    apiClient.get<PageResult<EventWaitView>>(
+      `${ADMIN_EVENTS}/${encodeURIComponent(eventKey)}/waits`,
+      {
+        params: { page, size },
+      },
+    ),
   channels: () => adminBeClient.get<RestChannelView[]>(CHANNELS),
   saveChannel: (key: string, payload: SaveRestChannelCommand) =>
     adminBeClient.put<RestChannelView>(`${channelPath(key)}/draft`, payload),

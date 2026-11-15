@@ -17,10 +17,11 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
- * Transitional, until Hub edits environment settings (phase 3): when a service is published in the catalog, its
- * base URL for the environment of the Flow Engine and its credentials are written to that engine's
- * {@code work_service_environment} through the Admin API, as the current user. The design itself travels with each
- * process deployment.
+ * First settings of a service on Flow Engine. When a service is published in the catalog and Flow Engine has no
+ * {@code work_service_environment} entry for it yet, its base URL for this environment and its credentials are
+ * written there through the Admin API, as the current user. Afterwards Hub owns them (screen "Cấu hình môi trường",
+ * phase 3): publishing again never overwrites what operations changed. The design itself travels with each process
+ * deployment.
  */
 @Component
 public class ServiceEnvironmentSync {
@@ -39,10 +40,15 @@ public class ServiceEnvironmentSync {
         this.properties = properties;
     }
 
-    public void push(String serviceKey) {
+    /** @return whether settings were written (false: Flow Engine already has them) */
+    public boolean seed(String serviceKey) {
+        if (engine.hasServiceEnvironment(serviceKey)) {
+            return false;
+        }
         PublishedService service = catalog.publishedService(serviceKey)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Dịch vụ " + serviceKey + " chưa publish"));
         engine.saveServiceEnvironment(serviceKey, json.convertValue(settings(service), MAP));
+        return true;
     }
 
     ServiceSettings settings(PublishedService service) {

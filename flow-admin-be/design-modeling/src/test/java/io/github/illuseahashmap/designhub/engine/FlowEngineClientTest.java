@@ -157,6 +157,13 @@ class FlowEngineClientTest {
         assertThat(save.path()).isEqualTo("/api/admin/service-environments/crm");
         assertThat(save.headers().get("Authorization")).containsExactly("Bearer user-token");
 
+        assertThat(client.hasServiceEnvironment("crm")).isTrue();
+        assertThat(received.get(2).method()).isEqualTo("GET");
+        assertThat(received.get(2).headers().get("Authorization")).containsExactly("Bearer user-token");
+        status = 404;
+        response = "{\"code\":\"NOT_FOUND\",\"message\":\"Dịch vụ crm chưa có cấu hình môi trường\"}";
+        assertThat(client.hasServiceEnvironment("crm")).isFalse();
+
         UserToken.clear();
         assertThatThrownBy(() -> client.saveServiceEnvironment("crm", Map.of()))
                 .isInstanceOfSatisfying(BusinessException.class,

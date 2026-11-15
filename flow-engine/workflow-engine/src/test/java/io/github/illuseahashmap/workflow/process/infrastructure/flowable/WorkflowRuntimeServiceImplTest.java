@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.illuseahashmap.workflow.process.application.WorkflowDefinitionService;
 import io.github.illuseahashmap.workflow.process.application.WorkflowInteractionGuard;
 import io.github.illuseahashmap.workflow.process.application.WorkflowOperationAuditService;
+import io.github.illuseahashmap.workflow.process.application.dto.ReassignTaskRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.RejectTaskRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.StartProcessRequest;
 import io.github.illuseahashmap.workflow.process.infrastructure.lock.ProcessInstanceTransactionExecutor;
@@ -205,6 +206,33 @@ class WorkflowRuntimeServiceImplTest {
 
         verify(participantDirectory).requireUsableUsernames(List.of("alice", "bob"));
         verify(runtimeService, never()).setVariables(eq("instance-1"), anyMap());
+    }
+
+    @Test
+    void anAdminReassignsATaskHeDoesNotHold() {
+        when(tenantProvider.current()).thenReturn(
+                new TenantContext.TenantInfo("tenant-1", "tenant-one", "Tenant One"));
+        when(principalProvider.current()).thenReturn(new CurrentPrincipal(
+                "USER", "user-9", "admin", "Admin", "tenant-one", Set.of("WF_ADMIN"), Set.of()));
+        when(taskService.createTaskQuery()).thenReturn(taskQuery);
+        when(taskQuery.taskId("task-1")).thenReturn(taskQuery);
+        when(taskQuery.active()).thenReturn(taskQuery);
+        when(taskQuery.singleResult()).thenReturn(task);
+        when(task.getId()).thenReturn("task-1");
+        when(task.getProcessInstanceId()).thenReturn("instance-1");
+        when(task.getTenantId()).thenReturn("tenant-1");
+        when(task.getAssignee()).thenReturn("alice");
+        when(taskService.getIdentityLinksForTask("task-1")).thenReturn(List.of());
+        when(transactionExecutor.execute(eq("instance-1"), any())).thenAnswer(invocation ->
+                ((Supplier<?>) invocation.getArgument(1)).get());
+
+        service().reassign("task-1", new ReassignTaskRequest("Bob", null, "alice nghỉ phép"));
+
+        verify(taskViewAssembler, never()).canOperate(any(), any());
+        verify(participantDirectory).requireUsableUsernames(List.of("bob"));
+        verify(taskService).setAssignee("task-1", "bob");
+        verify(auditService).record("TASK_REASSIGNED", "instance-1", null, "task-1", "alice -> Bob",
+                "ASSIGNED", "REASSIGNED", "alice nghỉ phép");
     }
 
     private BpmnModel modelWithUserTask(String activityId) {

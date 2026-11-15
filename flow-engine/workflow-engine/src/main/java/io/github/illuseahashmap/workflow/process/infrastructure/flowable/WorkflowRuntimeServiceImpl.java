@@ -11,6 +11,7 @@ import io.github.illuseahashmap.workflow.process.application.dto.ParticipantAssi
 import io.github.illuseahashmap.workflow.process.application.dto.ParticipantRequirementView;
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessParticipantRequirementsRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessStatusView;
+import io.github.illuseahashmap.workflow.process.application.dto.ReassignTaskRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.RejectTaskRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.StartProcessRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.StartProcessResult;
@@ -289,17 +290,34 @@ public class WorkflowRuntimeServiceImpl implements WorkflowRuntimeService {
         return transactionExecutor.execute(processInstanceId, () -> {
             CurrentPrincipal actor = principalProvider.current();
             Task task = getActiveTaskForOperation(request.taskId(), actor);
-            validateTransferTarget(request);
-            String previousAssignee = task.getAssignee();
-            clearCandidates(task.getId());
-            applyTransferTarget(task.getId(), request);
-            addTransferComment(task, request, previousAssignee, actor.username());
-            auditService.record(
-                    "TASK_TRANSFERRED", processInstanceId, null, task.getId(),
-                    previousAssignee + " -> " + transferTarget(request),
-                    "ASSIGNED", "TRANSFERRED", request.comment());
-            return taskViewAssembler.fromActiveTask(getActiveTask(task.getId()));
+            return moveTask(task, request, actor, "TASK_TRANSFERRED", "TRANSFERRED");
         });
+    }
+
+    @Override
+    public TaskView reassign(String taskId, ReassignTaskRequest request) {
+        TransferTaskRequest transfer = new TransferTaskRequest(taskId, null, List.of(),
+                request.targetAssignee(), request.targetCandidateUsers(), List.of(), request.reason());
+        String processInstanceId = getProcessInstanceIdForTask(taskId);
+        return transactionExecutor.execute(processInstanceId, () -> {
+            // Admin: no assignee check. activeTask still checks the tenant.
+            Task task = getActiveTask(taskId);
+            return moveTask(task, transfer, principalProvider.current(), "TASK_REASSIGNED", "REASSIGNED");
+        });
+    }
+
+    private TaskView moveTask(Task task, TransferTaskRequest request, CurrentPrincipal actor,
+                              String auditAction, String toStatus) {
+        validateTransferTarget(request);
+        String previousAssignee = task.getAssignee();
+        clearCandidates(task.getId());
+        applyTransferTarget(task.getId(), request);
+        addTransferComment(task, request, previousAssignee, actor.username());
+        auditService.record(
+                auditAction, task.getProcessInstanceId(), null, task.getId(),
+                previousAssignee + " -> " + transferTarget(request),
+                "ASSIGNED", toStatus, request.comment());
+        return taskViewAssembler.fromActiveTask(getActiveTask(task.getId()));
     }
 
     private String resolveProcessDefinitionId(

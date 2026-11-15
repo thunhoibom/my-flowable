@@ -28,7 +28,7 @@ Spec này chốt ranh giới, API giữa các repo và lộ trình. Mỗi giai �
 
 | STT | Thành phần (bảng thiết kế) | Mô tả trong bảng | Ở đây | Số lượng deploy tối thiểu |
 |---|---|---|---|---|
-| 1 | Flow Admin | Giao diện quản trị, ReactJS | `flow-admin`: SPA khu vực Design, Hub, Work. Hiện dùng **Vue**, xem mục Rủi ro | 2 |
+| 1 | Flow Admin | Giao diện quản trị, Vue | `flow-admin`: SPA khu vực Design, Hub, Work | 2 |
 | 2 | Flow Admin BE | API quản trị cho giao diện, tương tác trực tiếp với CSDL, Java | `flow-admin-be`: Java, chỉ đọc và ghi các bảng thuộc về mình; dữ liệu runtime lấy qua Admin API của Flow Engine | 2 |
 | 3 | Flow Engine | Core xử lý flow nghiệp vụ theo cấu hình từ Flow Admin, dùng core Flowable | `flow-engine`: Flowable 8.0.0, nhận cấu hình qua Deployment API (JSON) từ Flow Admin BE | 2 |
 | 4 | Postgres | CSDL cho Flow Admin và Flow Engine, Master-Slave | Dùng chung DB `workflow_agent` và một schema `public`; mỗi bên sở hữu một nhóm bảng. Replication Master-Slave do hạ tầng lo, xem mục Triển khai | 2 |
@@ -43,8 +43,8 @@ Nguồn: [Full platform install](https://documentation.flowable.com/latest/admin
 |---|---|
 | Design, Work, Hub là 3 WAR riêng, mỗi WAR có UI riêng | 2 backend (Design và Hub gộp thành Flow Admin BE, Work là Flow Engine), 1 frontend chung Flow Admin cho cả ba |
 | Design publish App lên Work qua REST (`flowable.design.deployment-api-url`) | Giữ nguyên ý tưởng: Flow Admin BE gửi một request JSON (BPMN, dịch vụ, luật gán) qua REST tới Flow Engine |
-| Có thể khai báo nhiều đích deploy (`flowable.design.deployment.<id>.*`) và bắt duyệt trước khi publish (`publish-request-required`) | Giữ nguyên, làm ở giai đoạn 5 |
-| Hub gọi REST API của Work, không đọc DB của Work; mỗi Work là một "cluster" khai báo trong Hub | Giữ nguyên |
+| Có thể khai báo nhiều đích deploy (`flowable.design.deployment.<id>.*`) và bắt duyệt trước khi publish (`publish-request-required`) | Không làm nhiều đích: mỗi môi trường có Flow Admin BE riêng, phát hành lên Flow Engine của chính môi trường đó (người dùng chốt 2026-11-15). Bắt duyệt trước khi publish để giai đoạn 5 |
+| Hub gọi REST API của Work, không đọc DB của Work; mỗi Work là một "cluster" khai báo trong Hub | Hub gọi REST (Admin API) của Flow Engine, không đọc DB. **Không có danh sách cluster**: mỗi môi trường chỉ xem Flow Engine của chính nó (người dùng chốt 2026-11-15) |
 | Design/Hub có thể dùng chung DB với Work hoặc DB riêng | **Dùng chung DB `workflow_agent` và schema `public`**, mỗi bên sở hữu bảng riêng |
 | Mỗi app một user store, cùng nối vào một IdP qua OAuth2 | Cùng dùng Keycloak/EIM. Mỗi app tự kiểm quyền của mình |
 | Work cần Elasticsearch, trừ trường hợp xử lý thẳng, tải nhẹ (`flowable.indexing.enabled=false`) | Chưa dùng ES |
@@ -64,21 +64,19 @@ Nguồn: [Full platform install](https://documentation.flowable.com/latest/admin
     │
     ▼
  ┌────────────────── Flow Admin (1 SPA, nginx) ──────────────────┐
- │  /design/**   /hub/**                    /work/**             │
- └──────┬───────────────────────────────────────────┬────────────┘
-        │ /api/admin-be/**                          │ /api/engine/**
-        ▼                                           │
- ┌───────────────────────── Flow Admin BE ──────────┼───────────────┐
- │  Design: bản nháp, designer, catalog dịch vụ,    │               │
- │          event, luật gán người,                 │               │
- │          lịch sử phát hành                       │               │
- │  Hub:    danh sách Flow Engine, giám sát         │               │
- │          instance/job, deploy, tenant/quyền,     │               │
- │          cấu hình môi trường                     │               │
- └───────┬──────────────────────────────┬───────────┼───────────────┘
-         │ HTTPS: POST deployment JSON  │ HTTPS: Admin API
-         │ (service token)              │ (token của người dùng)
-         ▼                              ▼           ▼
+ │  /design/**          /hub/**                 /work/**         │
+ └──────┬─────────────────┬──────────────────────────┬───────────┘
+        │ /api/admin-be/** │ /api/engine/api/admin/** │ /api/engine/**
+        ▼                  │ (Admin API)              │ (Runtime API)
+ ┌──── Flow Admin BE ────┐ │                          │
+ │  Design: bản nháp,     │ │                          │
+ │  designer, catalog     │ │                          │
+ │  dịch vụ, event,       │ │                          │
+ │  lịch sử phát hành     │ │                          │
+ └───────┬────────────────┘ │                          │
+         │ HTTPS: POST deployment JSON (service token) │
+         │ + /api/admin/me (token người dùng)          │
+         ▼                  ▼                          ▼
  ┌──────────────────────────── Flow Engine ─────────────────────────┐
  │  Deployment API · Admin API · Runtime API                        │
  │  Flowable engine, service caller, callback, event inbound,       │◄── Hệ thống ngoài
@@ -87,7 +85,7 @@ Nguồn: [Full platform install](https://documentation.flowable.com/latest/admin
                             │
        ┌────────────────────┴──── Postgres: DB workflow_agent, schema public ──────┐
        │  bảng của Flow Engine   (ACT_*, flw_se_*, runtime, auth, outbox, ...)    │
-       │  bảng của Flow Admin BE (bản nháp, catalog, lịch sử phát hành, cluster)  │
+       │  bảng của Flow Admin BE (bản nháp, catalog, lịch sử phát hành)           │
        └────────────────────────────────────────────────────────────────────────────┘
                             Redis ← Flow Engine (thêm Flow Admin BE khi chạy nhiều node)
                             Keycloak/EIM ← cả hai backend
@@ -108,30 +106,33 @@ Nguồn: [Full platform install](https://documentation.flowable.com/latest/admin
 | Bản nháp quy trình, designer BPMN, kiểm khi lưu | ✔ | |
 | Guard (script, subprocess, call activity, event, agent) | Chạy trước khi publish | Chạy lại khi nhận deploy (bên quyết định) |
 | Catalog dịch vụ: soạn operation, tham số, luật lỗi | ✔ | |
-| Catalog dịch vụ: base URL, credential theo môi trường | Màn hình Hub | Lưu và dùng |
+| Catalog dịch vụ: base URL, credential theo môi trường | Chép sang Flow Engine ở lần publish đầu | Lưu và dùng; sửa qua màn Hub |
 | Gọi dịch vụ, nhiều bước, callback chờ | | ✔ |
 | Event/channel: soạn | ✔ | |
 | Event/channel: deploy vào event registry engine, nhận event | | ✔ |
-| Luật gán người: soạn | ✔ | |
+| Luật gán người: soạn | | ✔ (sửa trên version đã deploy, xem giai đoạn 1 và 2) |
 | Luật gán người: gắn vào definition, thực thi, fallback (chỉ đọc sau khi deploy) | | ✔ |
-| Giao lại một task đang chạy | Màn hình Hub | Admin API |
+| Giao lại một task đang chạy | | Admin API |
 | Lịch sử phát hành, rollback | ✔ | |
 | Deploy, suspend/resume, xoá version | Ra lệnh | Thực hiện |
 | Start, duyệt, từ chối, chuyển, interaction | | ✔ (Runtime API, khu vực Work của Flow Admin) |
-| Danh sách và chi tiết instance, terminate, job lỗi, retry | Màn hình Hub | Admin API |
-| Tenant, người dùng, role, RLS | Màn hình Hub | Lưu dữ liệu và thực thi |
-| Outbox/inbox, audit vận hành | Màn hình Hub | ✔ |
-| Danh sách các Flow Engine (cluster) | ✔ | |
+| Danh sách và chi tiết instance, terminate, job lỗi, retry | | Admin API |
+| Tenant, người dùng, role, RLS | | Lưu dữ liệu và thực thi (role ở EIM) |
+| Outbox/inbox, audit vận hành | | ✔ |
+
+Mọi màn vận hành (Hub) nằm ở khu vực Hub của Flow Admin và gọi thẳng Admin API của Flow Engine trong cùng môi trường; Flow Admin BE không đứng giữa.
 
 ## Repository và phụ thuộc giữa repo
 
 ```
-              ┌── Design, Hub ──REST──► flow-admin-be ──────────REST─────────┐
+              ┌── Design ───────REST──► flow-admin-be ──────────REST─────────┐
  flow-admin ──┤                                                              ▼
-              └── Work ─────────REST──────────────────────────────────► flow-engine ◄── hệ thống ngoài
+              ├── Hub ──────────REST (Admin API) ─────────────────────► flow-engine ◄── hệ thống ngoài
+              └── Work ─────────REST (Runtime API) ───────────────────►
 ```
 
-- **Khu vực Design và Hub** của Flow Admin chỉ gọi `flow-admin-be`. Hub không gọi thẳng Flow Engine mà đi qua Flow Admin BE (BFF), vì Hub quản lý được nhiều Flow Engine (dev, staging, prod), trong khi frontend chỉ biết một Flow Engine.
+- **Khu vực Design** của Flow Admin gọi `flow-admin-be`, và đọc thẳng Admin API của Flow Engine những gì đã deploy (version, callers/callees, event đang được dùng).
+- **Khu vực Hub** gọi thẳng Admin API (`/api/admin/**`) của Flow Engine trong cùng môi trường. Không có BFF và không có danh sách nhiều Flow Engine: mỗi môi trường có bộ Flow Admin, Flow Admin BE, Flow Engine riêng (người dùng chốt 2026-11-15, "môi trường nào thì xem của môi trường đấy").
 - **Khu vực Work** của Flow Admin chỉ gọi Runtime API của `flow-engine`.
 - `flow-admin-be` chỉ phụ thuộc vào `flow-engine` qua REST API. **Không có artifact Maven dùng chung.** Flow Admin BE tự khai báo DTO của request/response mình gọi.
 - `flow-engine` không phụ thuộc repo nào.
@@ -168,7 +169,6 @@ flow-admin-be/
   shared-kernel/          (bản chép)
   design-modeling/        bản nháp quy trình, catalog nháp, event nháp, luật gán nháp,
                             lịch sử phát hành, client gọi Deployment API
-  hub-admin/              danh sách cluster, BFF gọi Admin API của Flow Engine
   admin-be-migrations/    migration cho các bảng của Flow Admin BE (schema public)
   admin-be-boot/
 ```
@@ -206,7 +206,7 @@ Nguyên tắc 3 được giữ bằng quy ước và review: code của mỗi ba
 | `workflow_active_version` | Flow Engine | Di sản từ trước bản draft/publish. Xử lý theo spec draft-publish |
 | `ACT_*`, `FLW_EVENT_*`, `agent_*`, `auth_*`, `platform_*`, `service_callback_wait`, `workflow_service_*`, `workflow_tenant`, `workflow_operation_audit`, `workflow_assignment_fallback_command` | Flow Engine | |
 
-Bảng mới của Flow Admin BE: `work_cluster` lưu danh sách Flow Engine, URL và cách xác thực. Lịch sử phát hành cần thêm cột lưu nguyên JSON đã gửi (dùng cho rollback và mở lại vào bản nháp) và trạng thái PENDING/DEPLOYED/FAILED; thêm vào bảng `*_release` hiện có.
+Flow Admin BE không có bảng mới: không có `work_cluster` (xem giai đoạn 3), và lịch sử phát hành không lưu JSON đã gửi (xem giai đoạn 2).
 
 Bảng mới của Flow Engine:
 
@@ -326,11 +326,11 @@ Có ba nhóm API, mỗi nhóm một đối tượng gọi và một cách xác t
 |---|---|---|---|
 | `/api/runtime/**` | Khu vực Work của Flow Admin, hệ thống ngoài | Keycloak JWT của người dùng, hoặc service token cho hệ thống | start, task approve/reject/transfer, interaction, hộp việc |
 | `/api/deployment/**` | Flow Admin BE | Service token (`workflow_service_client`, giới hạn `allowed_paths`), header `X-Acting-User` để ghi audit | deploy quy trình/event, suspend/resume, xoá version, kiểm key có tồn tại |
-| `/api/admin/**` | Flow Admin BE (Hub) | Chuyển tiếp Keycloak JWT của người dùng ("Current User"), để role và RLS của Flow Engine tự áp dụng | instance page/detail/terminate, job lỗi/retry, deploy, tenant/user/role, cấu hình môi trường, outbox, audit |
+| `/api/admin/**` | Khu vực Hub và Design của Flow Admin; Flow Admin BE (`/me`, `service-environments`) | Keycloak JWT của chính người dùng ("Current User"), để role và RLS của Flow Engine tự áp dụng. Không nhận service token | instance, giao lại task, job lỗi, version đã deploy, event, luật gán người, tenant, thành viên, cấu hình môi trường. Danh sách đầy đủ ở `flow-engine/docs/superpowers/plans/2026-11-15-admin-api.md` |
 
-Phải dùng token người dùng cho Admin API để không có "confused deputy": Hub không được làm điều mà chính người dùng đó không được phép làm trên Flow Engine. Flow Engine hiện đã xác minh được Keycloak JWT (`KeycloakJwtVerifier`), nên không cần cơ chế mới.
+Phải dùng token người dùng cho Admin API để không có "confused deputy": không màn nào làm được điều mà chính người dùng đó không được phép làm trên Flow Engine. Flow Engine hiện đã xác minh được Keycloak JWT (`KeycloakJwtVerifier`), nên không cần cơ chế mới.
 
-Các endpoint đang có (`/workflow/management/**`, `/workflow/**`) vẫn chạy song song cho tới khi frontend chuyển xong ở giai đoạn 4, rồi mới bỏ.
+Các endpoint cũ (`/workflow/management/**`, `/workflow/tenant`, `/auth/access`, `/auth/directory`, `/workflow/node-assignment-rule`) vẫn chạy song song; từ giai đoạn 3 frontend không gọi chúng nữa. Bỏ hẳn ở giai đoạn 4, cùng lúc Work chuyển sang `/api/runtime/**`.
 
 ## Xác thực và phân quyền
 
@@ -346,10 +346,10 @@ Một repo `flow-admin`, lấy từ `workflow-agent-web` hiện tại. Đây là
 ```
 flow-admin/src/
   areas/
-    design/   bpmn/, process-definition (designer), service-registry, event-registry,
-              assignment-rule                                  → gọi /api/admin-be
-    hub/      instances, jobs, deployments, clusters, environment, access, tenant
-                                                               → gọi /api/admin-be (BFF)
+    design/   bpmn/, process-definition (designer), service-registry, event-registry
+                                                               → gọi /api/admin-be (+ đọc Admin API)
+    hub/      instances, jobs, environment, access, tenant, assignment-rule
+                                                               → gọi /api/engine (Admin API)
     work/     inbox (mới), start process, quy trình của tôi, chi tiết task
                                                                → gọi /api/engine
   shared/     components, styles, http, auth, layout, router guard, i18n
@@ -358,7 +358,7 @@ flow-admin/src/
 Quy tắc ranh giới, kiểm bằng `__tests__/architecture.spec.ts` (đã có sẵn):
 
 - Các khu vực không import lẫn nhau. Chỉ được import từ `shared/`.
-- Mỗi khu vực có một API client riêng, trỏ tới đúng một backend. Khu vực Work không được dùng client của Flow Admin BE, và ngược lại.
+- Mỗi khu vực có API client riêng. Work chỉ gọi Runtime API, Hub chỉ gọi Admin API, Design gọi Flow Admin BE và đọc Admin API.
 - Route có tiền tố theo khu vực (`/design/**`, `/hub/**`, `/work/**`). Menu lấy từ sitemap EIM.
 - Khu vực Work chỉ dùng Runtime API. Nhờ vậy sửa frontend cho Design hay Hub không thể làm hỏng luồng của người dùng cuối, trừ khi đụng vào `shared/`.
 
@@ -374,13 +374,13 @@ Ba image, ba đơn vị deploy. Số node tối thiểu theo bảng thành phầ
 | Repo | Image | Cổng local | Số node tối thiểu | Phụ thuộc lúc chạy |
 |---|---|---|---|---|
 | `flow-engine` | `flow-engine` | 8080 | 2 | Postgres, Redis, Keycloak |
-| `flow-admin-be` | `flow-admin-be` | 8081 | 2 | Postgres, Keycloak, các Flow Engine đích |
+| `flow-admin-be` | `flow-admin-be` | 8081 | 2 | Postgres, Flow Engine của cùng môi trường |
 | `flow-admin` | `flow-admin` (nginx + static) | 5174 | 2 | `flow-admin-be`, `flow-engine` |
 
 - nginx của Flow Admin proxy `/api/admin-be/**` tới Flow Admin BE và `/api/engine/**` tới Flow Engine. URL của hai backend lấy từ biến môi trường lúc chạy container (template nginx với `envsubst`), không đóng cứng lúc build, để một image dùng được cho mọi môi trường.
 - Flow Engine chạy nhiều node như hiện nay: DB làm điểm đồng bộ, Redis giữ session.
 - Flow Admin là static, chạy nhiều node không cần gì thêm.
-- Flow Admin BE chạy 2 node thì cần Redis giữ session và cần chốt cơ chế cho việc chạy nền (gửi lại deploy lỗi mạng), xem mục Rủi ro.
+- Flow Admin BE không giữ session và không chạy nền (phát hành gọi đồng bộ), nên chạy nhiều node không cần gì thêm.
 - Postgres theo mô hình Master-Slave. Cả hai backend ghi vào master. Có cho đọc từ slave hay không thì chưa chốt, xem mục Rủi ro.
 
 ### Chạy local
@@ -411,13 +411,15 @@ Thứ tự này nhằm **làm phía Flow Engine trước rồi đóng băng**. S
 
 **Giai đoạn 2 (đã làm, 2026-11-13):** chi tiết ở `flow-admin-be/docs/superpowers/plans/2026-11-13-phase2-design-move.md`. Người dùng chốt: Flow Admin BE xác thực bằng cách hỏi Flow Engine (`GET /api/admin/me`, cache 60 giây) thay vì tự kiểm JWT; không làm luật gán người nháp, phát hành yêu cầu Flow Engine chép luật từ version trước (`copyAssignmentsFromLatest` / `copyAssignmentsFromVersion`, trường thêm vào Deployment API). Lịch sử phát hành không lưu JSON đã gửi; rollback đọc nội dung version từ Flow Engine. Base URL và secret của dịch vụ vẫn nhập ở catalog, được ghi sang `work_service_environment` khi publish dịch vụ, tới khi Hub có màn riêng.
 
+**Giai đoạn 3 (đã làm, 2026-11-15):** chi tiết ở `flow-engine/docs/superpowers/plans/2026-11-15-admin-api.md`. Khác với bảng dưới (người dùng chốt): **không có BFF ở Flow Admin BE và không có `work_cluster`**, màn Hub gọi thẳng Admin API của Flow Engine trong cùng môi trường. Cấu hình môi trường của dịch vụ: catalog chỉ chép sang Flow Engine ở lần publish đầu, sau đó sửa ở màn Hub. Luật gán người vẫn sửa được (`/api/admin/assignment-rules`).
+
 | Giai đoạn | Nội dung | Xong khi |
 |---|---|---|
 | 1. Phía nhận deploy của Flow Engine | Trong `flow-engine`: service engine `flw_se_deployment`, `flw_se_deployment_resource`, `flw_se_definition`; `work_service_environment`; `/api/deployment/processes` và `/api/deployment/events` (JSON); runtime tra định nghĩa dịch vụ theo deployment cha thay vì `catalog.publishedService(key)`; deploy event tách khỏi deploy quy trình; luật gán người chỉ ghi khi nhận deploy (bỏ các endpoint sửa luật ở `/workflow/node-assignment-rule`). Nút Phát hành gọi cùng service đó (gọi nội bộ) | Phát hành lại một dịch vụ không làm đổi hành vi của instance đang chạy. Publish một quy trình không đổi được event. Có test chứng minh |
 | 2. Chuyển code soạn thảo sang Flow Admin BE | Chuyển code bản nháp, catalog nháp, event nháp, luật gán nháp từ `flow-engine` sang `flow-admin-be`; Flow Admin BE dùng lại các bảng soạn thảo cũ trong schema `public` (giữ tên và dữ liệu), có bảng lịch sử Flyway riêng; nút Phát hành gọi REST. Trong `flow-admin`: tách hai API client, `/api/admin-be` và `/api/engine` | Hai backend chạy riêng. Tắt Flow Admin BE thì Flow Engine vẫn đi đủ luồng |
-| 3. Admin API và Hub | `/api/admin/**`; `work_cluster`; khu vực Hub trong `flow-admin` (gọi qua BFF của Flow Admin BE): instance, giao lại task, job lỗi, deploy, cấu hình môi trường, tenant/access | Không còn màn vận hành nào gọi thẳng `/workflow/management/**`. **Đóng băng Flow Engine** |
+| 3. Admin API và Hub | `/api/admin/**`; khu vực Hub trong `flow-admin` gọi thẳng Admin API: instance, giao lại task, job lỗi, deploy, cấu hình môi trường, tenant/access | Không còn màn vận hành nào gọi thẳng `/workflow/management/**`. **Đóng băng Flow Engine** |
 | 4. Chia khu vực frontend | Sắp xếp lại `src/` thành `areas/{design,hub,work}` và `shared/`; luật ranh giới trong `architecture.spec.ts`; khu vực Work có hộp việc; bỏ các endpoint cũ | Ba khu vực không import lẫn nhau; khu vực Work chỉ gọi Runtime API |
-| 5. Hoàn thiện phát hành | Nhiều đích Flow Engine; bắt duyệt trước khi publish; quyền theo đích trong Design | Publish lên prod buộc phải qua duyệt |
+| 5. Hoàn thiện phát hành | Bắt duyệt trước khi publish; quyền trong Design | Publish buộc phải qua duyệt ở môi trường cần duyệt |
 
 ## Quyết định đã chốt (2026-11-13)
 
@@ -430,12 +432,12 @@ Ba điểm đầu theo cách Flowable Enterprise đang làm, đã đối chiếu
 5. **Khu vực Work nằm trong Flow Admin.** Bảng thành phần không có giao diện cho người dùng cuối. Hộp việc, start, duyệt vẫn là một khu vực của Flow Admin.
 6. **Không có hợp đồng package (người dùng chốt 2026-11-13, "làm đơn giản").** Bỏ zip, manifest, hash, `contractVersion`, `fixtures/`, artifact `app-contract` và bảng `work_app_deployment` (dùng `ACT_RE_DEPLOYMENT` của Flowable). Hai backend chỉ nói chuyện qua REST/JSON, mỗi bên tự giữ DTO.
 7. **Một schema `public`, dùng lại tên bảng cũ (người dùng chốt 2026-11-13).** Không tạo schema `flow_admin`, không tách user DB. Flow Admin BE dùng lại các bảng soạn thảo đang có; mỗi bảng thuộc về đúng một backend theo mục Dữ liệu.
+8. **Mỗi môi trường chỉ xem Flow Engine của chính nó (người dùng chốt 2026-11-15, "hơi over engineer").** Không có BFF Hub ở Flow Admin BE, không có bảng `work_cluster`, không phát hành lên nhiều đích. Hub gọi thẳng Admin API.
 
 ## Rủi ro và việc cần kiểm
 
 - **Lệch với bảng thành phần, chưa chốt:**
-  - Bảng ghi Flow Admin dùng ReactJS, còn `flow-admin` đang dùng Vue. Nếu React là bắt buộc thì nên viết lại ở giai đoạn 4, vì giai đoạn đó vốn đã sắp xếp lại toàn bộ `src/`.
-  - Flow Admin BE chạy tối thiểu 2 node: cần Redis cho session, và cần khoá phân tán hoặc outbox cho việc chạy nền để hai node không gửi trùng.
+  - Flow Admin BE chạy tối thiểu 2 node: không giữ session (hỏi Flow Engine mỗi request, cache 60 giây) và không có việc chạy nền, nên hiện chưa cần Redis hay khoá phân tán.
   - Postgres Master-Slave: cần chốt có tách đọc sang slave không. Nếu có, chỉ màn danh sách của Hub được đọc slave. Nhận deploy và runtime luôn dùng master.
 - **Kiểm điều kiện trên DB dùng chung:** theo memory, các truy vấn kiểm điều kiện của V40 mới chỉ chạy trên local. Phải chạy lại trên môi trường dùng chung trước khi phát hành.
 - **Dọn dữ liệu cũ:** vì không migrate, trước khi lên giai đoạn 1 ở môi trường dùng chung phải xoá sạch instance và deploy cũ, hoặc dựng DB mới, để không còn instance nào đọc `service_publication`.

@@ -28,11 +28,6 @@
         </dependency>
         <dependency>
             <groupId>io.github.illuseahashmap</groupId>
-            <artifactId>hub-admin</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github.illuseahashmap</groupId>
             <artifactId>admin-be-migrations</artifactId>
             <version>${project.version}</version>
         </dependency>

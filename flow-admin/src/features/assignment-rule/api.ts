@@ -8,7 +8,8 @@ import type {
   EmptyUserStrategy,
 } from './types'
 
-const ROOT = '/workflow/node-assignment-rule'
+/** Admin API of Flow Engine. */
+const ROOT = '/api/admin/assignment-rules'
 
 export interface AssignmentRuleQuery {
   pageNum: number
@@ -27,7 +28,7 @@ export const assignmentRuleApi = {
     apiClient.get<PageResult<AssignmentRule>>(ROOT, { params }),
   create: (payload: AssignmentRuleCommand) => apiClient.post<AssignmentRule>(ROOT, payload),
   update: (id: number, payload: AssignmentRuleCommand) =>
-    apiClient.post<void>(`${ROOT}/${id}`, payload),
+    apiClient.put<void>(`${ROOT}/${id}`, payload),
   delete: (id: number) => apiClient.delete<void>(`${ROOT}/${id}`),
   inherit: (processDefinitionId: string) =>
     apiClient.post<AssignmentRuleInheritResult>(`${ROOT}/inherit`, { processDefinitionId }),

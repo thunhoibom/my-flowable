@@ -10,6 +10,8 @@ export type NavigationIcon =
   | 'events'
   | 'access'
   | 'tenants'
+  | 'failedJobs'
+  | 'environments'
 
 declare module 'vue-router' {
   interface RouteMeta {

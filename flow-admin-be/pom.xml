@@ -21,7 +21,6 @@
     <modules>
         <module>shared-kernel</module>
         <module>design-modeling</module>
-        <module>hub-admin</module>
         <module>admin-be-migrations</module>
         <module>admin-be-boot</module>
     </modules>

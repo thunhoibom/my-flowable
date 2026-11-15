@@ -602,6 +602,12 @@ onMounted(() => {
             :rows="2"
           />
         </el-form-item>
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          title="Địa chỉ gốc và khóa chỉ được chép sang môi trường ở lần publish đầu tiên. Sau đó hãy sửa ở màn Cấu hình môi trường."
+        />
         <el-form-item label="Địa chỉ gốc theo môi trường">
           <div
             v-for="(row, index) in editForm.baseUrls"
