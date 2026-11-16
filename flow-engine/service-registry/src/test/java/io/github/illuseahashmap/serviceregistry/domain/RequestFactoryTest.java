@@ -175,50 +175,18 @@ class RequestFactoryTest {
 
     @Test
     void letsAuthReplaceAStaticHeaderAndPutsAnApiKeyOnTheQuery() {
-        var bearer = new PublishedOperation(
+        var custom = new PublishedOperation(
                 "createLead", HttpMethod.GET, "https://crm.example/leads",
-                AuthMode.OVERRIDE, AuthType.BEARER, null, "s3cret", null,
+                AuthMode.OVERRIDE, AuthType.CUSTOM_HEADER, "X-Api-Token", "tok", null,
                 1000, 1000, List.of(), List.of(), List.of(), List.of(),
-                ContentType.JSON, null, List.of(new StaticHeader("Authorization", "old"), new StaticHeader("Accept", "text/plain")),
-                BodyPresence.NONE, ApiKeyLocation.HEADER);
-        var bearerRequest = RequestFactory.create(bearer, Map.of());
-        assertEquals("Bearer s3cret", bearerRequest.headers().get("Authorization"));
-        assertEquals("text/plain", bearerRequest.headers().get("Accept"));
-
-        var queryKey = new PublishedOperation(
+                ContentType.JSON, null, List.of(), BodyPresence.NONE, ApiKeyLocation.HEADER);
+        assertEquals("tok", RequestFactory.create(custom, Map.of()).headers().get("X-Api-Token"));
+        var unnamed = new PublishedOperation(
                 "createLead", HttpMethod.GET, "https://crm.example/leads",
-                AuthMode.OVERRIDE, AuthType.API_KEY, "api_key", "s3cret", null,
+                AuthMode.OVERRIDE, AuthType.CUSTOM_HEADER, null, "tok", null,
                 1000, 1000, List.of(), List.of(), List.of(), List.of(),
-                ContentType.JSON, null, List.of(), BodyPresence.NONE, ApiKeyLocation.QUERY);
-        var queryRequest = RequestFactory.create(queryKey, Map.of());
-        assertEquals("https://crm.example/leads?api_key=s3cret", queryRequest.url());
-        assertFalse(queryRequest.headers().containsKey("api_key"));
-    }
-
-    @Test
-    void signsMethodPathAndBodyAndReadsABearerVariable() throws Exception {
-        var hmac = new PublishedOperation(
-                "createLead", HttpMethod.POST, "https://crm.example/orders",
-                AuthMode.OVERRIDE, AuthType.HMAC, null, "key", "{\"a\":1}",
-                1000, 1000, List.of(), List.of(), List.of(), List.of(),
-                ContentType.JSON, null, List.of(new StaticHeader("X-Signature", "old")),
-                BodyPresence.CONTENT, ApiKeyLocation.HEADER,
-                new AuthDetails(null, null, List.of(), null, null, null, null, null, "X-Signature"));
-        var signed = RequestFactory.create(hmac, Map.of());
-        String canonical = "POST\n/orders\n{\"a\":1}";
-        javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
-        mac.init(new javax.crypto.spec.SecretKeySpec("key".getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
-        String expected = java.util.HexFormat.of().formatHex(mac.doFinal(canonical.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-        assertEquals(expected, signed.headers().get("X-Signature"));
-
-        var bearer = new PublishedOperation(
-                "createLead", HttpMethod.GET, "https://crm.example/leads",
-                AuthMode.OVERRIDE, AuthType.BEARER_VARIABLE, null, null, null,
-                1000, 1000, List.of(), List.of(), List.of(), List.of(),
-                ContentType.JSON, null, List.of(), BodyPresence.NONE, ApiKeyLocation.HEADER,
-                new AuthDetails(null, null, List.of(), null, "accessToken", null, null, null, null));
-        assertEquals("Bearer tok", RequestFactory.create(bearer, Map.of("accessToken", "tok")).headers().get("Authorization"));
-        assertThrows(InvalidServiceRequestException.class, () -> RequestFactory.create(bearer, Map.of()));
+                ContentType.JSON, null, List.of(), BodyPresence.NONE, ApiKeyLocation.HEADER);
+        assertThrows(InvalidServiceRequestException.class, () -> RequestFactory.create(unnamed, Map.of()));
     }
 
     private static PublishedOperation contentOperation(

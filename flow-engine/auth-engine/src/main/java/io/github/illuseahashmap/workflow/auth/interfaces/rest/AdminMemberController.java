@@ -5,7 +5,7 @@ import io.github.illuseahashmap.workflow.auth.application.UserDirectoryService;
 import io.github.illuseahashmap.workflow.auth.application.dto.AddTenantMemberRequest;
 import io.github.illuseahashmap.workflow.auth.application.dto.DirectoryUserView;
 import io.github.illuseahashmap.workflow.auth.application.dto.TenantMemberView;
-import io.github.illuseahashmap.workflow.shared.context.AdminRoles;
+import io.github.illuseahashmap.workflow.shared.context.ApiRoles;
 import io.github.illuseahashmap.workflow.shared.response.ApiResponse;
 import io.github.illuseahashmap.workflow.shared.response.PageResult;
 import jakarta.validation.Valid;
@@ -54,7 +54,7 @@ public class AdminMemberController {
 
     /** Users to add as members or to hand a task to. */
     @GetMapping("/directory/users")
-    @PreAuthorize(AdminRoles.OPERATE)
+    @PreAuthorize(ApiRoles.OPERATE)
     public ApiResponse<PageResult<DirectoryUserView>> users(@RequestParam(required = false) String keyword,
                                                             @RequestParam(required = false) Integer pageNum,
                                                             @RequestParam(required = false) Integer pageSize) {

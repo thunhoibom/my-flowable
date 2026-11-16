@@ -73,7 +73,7 @@ class SubProcessOperationsTest {
         CurrentPrincipalContext.set(new CurrentPrincipal("USER", "u1", "alice", "Alice", "tree", Set.of(), Set.of()));
         auditService = mock(WorkflowOperationAuditService.class);
         reads = new WorkflowInstanceReadService(engine.getRepositoryService(), engine.getRuntimeService(),
-                engine.getHistoryService(), engine.getTaskService(), engine, mock(AssignmentRuleService.class),
+                engine.getHistoryService(), engine.getTaskService(), mock(AssignmentRuleService.class),
                 null, TENANT_PROVIDER);
         ProcessInstanceTransactionExecutor executor = mock(ProcessInstanceTransactionExecutor.class);
         Mockito.when(executor.execute(anyString(), any())).thenAnswer(call -> ((Supplier<?>) call.getArgument(1)).get());

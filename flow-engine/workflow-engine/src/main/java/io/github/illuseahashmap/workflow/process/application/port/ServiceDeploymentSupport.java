@@ -1,6 +1,5 @@
 package io.github.illuseahashmap.workflow.process.application.port;
 
-import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 
@@ -8,12 +7,15 @@ import java.util.Set;
 public interface ServiceDeploymentSupport {
 
     /**
-     * The {@code <serviceKey>.service} content for a service definition sent with a deployment: the design only,
-     * with base URLs and credentials removed. Throws {@link IllegalArgumentException} when the definition cannot be
-     * read or names another service.
+     * The {@code <serviceKey>.service} content for a service model sent with a deployment: base URL, authorization
+     * (references only) and operations. Throws {@link IllegalArgumentException} when the model cannot be read,
+     * names another service, or holds a secret value.
      */
-    byte[] designOnly(String serviceKey, Map<String, Object> definition);
+    byte[] serviceResource(String serviceKey, Map<String, Object> definition);
 
-    /** The keys among {@code serviceKeys} that have no environment settings (base URL, credentials) here. */
-    Set<String> withoutEnvironment(String tenantId, Collection<String> serviceKeys);
+    /**
+     * What the given {@code .service} resources reference and this Flow Engine does not have, as labels such as
+     * {@code secret crmToken}, {@code OAuth2 client crm-oauth}, {@code biến tenant crmBaseUrl}. Empty when complete.
+     */
+    Set<String> missingConfiguration(String tenantId, Map<String, byte[]> services);
 }

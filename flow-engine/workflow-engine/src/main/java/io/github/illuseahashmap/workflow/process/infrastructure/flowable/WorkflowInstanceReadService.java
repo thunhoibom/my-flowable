@@ -13,8 +13,6 @@ import io.github.illuseahashmap.workflow.shared.context.TenantProvider;
 import io.github.illuseahashmap.workflow.shared.exception.BusinessException;
 import io.github.illuseahashmap.workflow.shared.exception.ErrorCode;
 import io.github.illuseahashmap.workflow.shared.response.PageResult;
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -34,7 +32,6 @@ import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.SequenceFlow;
 import org.flowable.engine.HistoryService;
-import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
@@ -43,7 +40,6 @@ import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.history.HistoricProcessInstanceQuery;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
-import org.flowable.image.ProcessDiagramGenerator;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.flowable.variable.api.history.HistoricVariableInstance;
@@ -61,7 +57,6 @@ class WorkflowInstanceReadService {
     private final RuntimeService runtimeService;
     private final HistoryService historyService;
     private final TaskService taskService;
-    private final ProcessEngine processEngine;
     private final AssignmentRuleService assignmentRuleService;
     private final WorkflowDefinitionReadService definitionReadService;
     private final TenantProvider tenantProvider;
@@ -70,7 +65,6 @@ class WorkflowInstanceReadService {
                                 RuntimeService runtimeService,
                                 HistoryService historyService,
                                 TaskService taskService,
-                                ProcessEngine processEngine,
                                 AssignmentRuleService assignmentRuleService,
                                 WorkflowDefinitionReadService definitionReadService,
                                 TenantProvider tenantProvider) {
@@ -78,28 +72,9 @@ class WorkflowInstanceReadService {
         this.runtimeService = runtimeService;
         this.historyService = historyService;
         this.taskService = taskService;
-        this.processEngine = processEngine;
         this.assignmentRuleService = assignmentRuleService;
         this.definitionReadService = definitionReadService;
         this.tenantProvider = tenantProvider;
-    }
-
-    byte[] generateDiagram(String processInstanceId) {
-        ProcessInstanceDescriptor descriptor = resolveProcessInstance(processInstanceId);
-        List<String> completed = historicActivities(processInstanceId).stream()
-                .filter(activity -> activity.getEndTime() != null)
-                .map(HistoricActivityInstance::getActivityId)
-                .toList();
-        List<String> highlighted = new ArrayList<>(completed);
-        highlighted.addAll(descriptor.activeActivityIds());
-        ProcessDiagramGenerator generator = processEngine.getProcessEngineConfiguration().getProcessDiagramGenerator();
-        try (InputStream input = generator.generateDiagram(
-                repositoryService.getBpmnModel(descriptor.processDefinitionId()),
-                "png", highlighted, List.of(), "Arial", "Arial", "Arial", null, 1.0, true)) {
-            return input.readAllBytes();
-        } catch (IOException exception) {
-            throw new BusinessException(ErrorCode.WORKFLOW_ERROR, "Process diagram generation failed");
-        }
     }
 
     ProcessDiagramDataView diagramData(String processInstanceId) {

@@ -3,9 +3,10 @@ package io.github.illuseahashmap.serviceregistry.engine;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.illuseahashmap.serviceregistry.domain.AuthConfig;
 import io.github.illuseahashmap.serviceregistry.domain.AuthType;
-import io.github.illuseahashmap.serviceregistry.domain.EnvironmentBaseUrl;
+import io.github.illuseahashmap.serviceregistry.domain.Authorization;
+import io.github.illuseahashmap.serviceregistry.domain.CredentialSource;
+import io.github.illuseahashmap.serviceregistry.domain.CredentialValue;
 import io.github.illuseahashmap.serviceregistry.domain.HttpMethod;
 import io.github.illuseahashmap.serviceregistry.domain.PublishedOperation;
 import io.github.illuseahashmap.serviceregistry.domain.PublishedService;
@@ -43,7 +44,7 @@ class JdbcServiceRepositoryServiceTest {
                     "V36__service_extended_auth.sql",
                     "V37__service_multi_step.sql",
                     "V41__service_engine.sql")) {
-                executeScript(statement, "/db/migration/platform/" + script);
+                executeScript(statement, "/db/" + script);
             }
         }
     }
@@ -102,12 +103,12 @@ class JdbcServiceRepositoryServiceTest {
     }
 
     @Test
-    void resourceKeepsTheDesignButNeverBaseUrlsOrSecrets() {
+    void resourceKeepsTheModelWithItsReferencesButNeverResolvedSecrets() {
         var repository = repository(null);
         String crm = unique("crm");
-        PublishedService withSecrets = new PublishedService(crm, "CRM", "leads",
-                List.of(new EnvironmentBaseUrl("default", "https://crm.example")),
-                new AuthConfig(AuthType.BEARER, null, "shared-secret"),
+        PublishedService withSecrets = new PublishedService(crm, "CRM", "leads", "${tenant.crmBaseUrl}",
+                new Authorization(AuthType.BEARER, null, null, null,
+                        new CredentialValue(CredentialSource.SECRET, "crmToken"), null, null, null, null),
                 List.of(new PublishedOperation("createLead", HttpMethod.POST, "/leads",
                         AuthType.BEARER, null, "operation-secret", null, 1000, List.of("409"), "LEAD_CONFLICT",
                         List.of(), List.of())));
@@ -118,12 +119,13 @@ class JdbcServiceRepositoryServiceTest {
                 .deploy();
 
         String stored = new String(repository.getResource(deployment.id(), crm + ".service"), StandardCharsets.UTF_8);
-        assertThat(stored).doesNotContain("shared-secret", "operation-secret", "crm.example");
+        assertThat(stored).doesNotContain("operation-secret").contains("crmToken");
         PublishedService model = repository.getServiceModelByKey(crm, "t1");
         assertThat(model.name()).isEqualTo("CRM");
         assertThat(model.operations().getFirst().urlTemplate()).isEqualTo("/leads");
         assertThat(model.operations().getFirst().errorRules()).isNotEmpty();
-        assertThat(model.baseUrls()).isEmpty();
+        assertThat(model.baseUrl()).isEqualTo("${tenant.crmBaseUrl}");
+        assertThat(model.authorization().secrets()).containsExactly("crmToken");
     }
 
     @Test
@@ -171,7 +173,7 @@ class JdbcServiceRepositoryServiceTest {
     }
 
     private static PublishedService service(String key, String path) {
-        return new PublishedService(key, key, null, List.of(), null, List.of(new PublishedOperation(
+        return new PublishedService(key, key, null, null, null, List.of(new PublishedOperation(
                 "call", HttpMethod.GET, path, AuthType.NONE, null, null, null, 1000, List.of("500"), "FAILED",
                 List.of(), List.of())));
     }

@@ -1,11 +1,13 @@
 package io.github.illuseahashmap.workflow.serviceregistry;
 
+import io.github.illuseahashmap.workflow.integration.DatabaseScripts;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sun.net.httpserver.HttpServer;
-import io.github.illuseahashmap.serviceregistry.domain.ServiceSettings;
-import io.github.illuseahashmap.serviceregistry.infrastructure.JdbcServiceEnvironmentStore;
+import io.github.illuseahashmap.serviceregistry.infrastructure.JdbcSecretStore;
+import io.github.illuseahashmap.serviceregistry.infrastructure.JdbcTenantVariableStore;
 import io.github.illuseahashmap.workflow.WorkflowAgentServiceApplication;
 import io.github.illuseahashmap.workflow.eventregistry.application.EventDeploymentService;
 import io.github.illuseahashmap.workflow.eventregistry.application.dto.EventDeploymentRequest;
@@ -49,7 +51,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * runs them on its own.
  * <ul>
  *   <li>Republishing a service does not change what a running instance calls.</li>
- *   <li>Base URL and secrets come from {@code work_service_environment} and take effect at once.</li>
+ *   <li>The base URL reads a tenant variable and the token a secret of this engine; both take effect at once.</li>
  *   <li>The same publish id deploys once.</li>
  *   <li>Deploying a process never changes an event.</li>
  * </ul>
@@ -74,7 +76,9 @@ class DeploymentApiIntegrationTest {
     @Autowired
     private EventDeploymentService eventDeployments;
     @Autowired
-    private JdbcServiceEnvironmentStore environments;
+    private JdbcTenantVariableStore tenantVariables;
+    @Autowired
+    private JdbcSecretStore secrets;
     @Autowired
     private RepositoryService repositoryService;
     @Autowired
@@ -89,8 +93,8 @@ class DeploymentApiIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.baseline-on-migrate", () -> "true");
-        registry.add("spring.flyway.baseline-version", () -> "0");
+        // Schema is managed by hand (flow-engine/db); tests apply the same scripts.
+        DatabaseScripts.apply(POSTGRES);
         registry.add("flowable.database-schema-update", () -> "true");
         registry.add("flowable.async-executor-activate", () -> "false");
         registry.add("workflow.agent.worker.enabled", () -> "false");
@@ -131,7 +135,7 @@ class DeploymentApiIntegrationTest {
     }
 
     @Test
-    void runningInstancesKeepTheServiceTheirVersionWasDeployedWithWhileTheEnvironmentAppliesAtOnce() {
+    void runningInstancesKeepTheServiceTheirVersionWasDeployedWithWhileTenantVariablesApplyAtOnce() {
         String suffix = suffix();
         String serviceKey = "crm_" + suffix;
         String processKey = "orders_" + suffix;
@@ -146,7 +150,7 @@ class DeploymentApiIntegrationTest {
         saveEnvironment(serviceKey, second);
         completeWaitTask(instance2);
 
-        assertThat(CALLS).containsExactly("first:/a", "second:/b");
+        assertThat(CALLS).containsExactly("first:/a:Bearer token-" + serviceKey, "second:/b:Bearer token-" + serviceKey);
     }
 
     @Test
@@ -170,13 +174,15 @@ class DeploymentApiIntegrationTest {
     }
 
     @Test
-    void aServiceWithoutEnvironmentSettingsIsRejectedAndNothingIsDeployed() {
+    void aServiceReferencingMissingConfigurationIsRejectedAndNothingIsDeployed() {
         String suffix = suffix();
         String processKey = "rejected_" + suffix;
 
         assertThatThrownBy(() -> system(() -> processDeployments.deploy(
                 request(UUID.randomUUID().toString(), processKey, "nowhere_" + suffix, "/a"))))
-                .hasMessageContaining("cấu hình môi trường");
+                .hasMessageContaining("thiếu cấu hình")
+                .hasMessageContaining("secret token_nowhere_" + suffix)
+                .hasMessageContaining("biến tenant url_nowhere_" + suffix);
         assertThat(system(() -> repositoryService.createProcessDefinitionQuery()
                 .processDefinitionTenantId(TENANT.tenantId()).processDefinitionKey(processKey).count()))
                 .isZero();
@@ -203,8 +209,10 @@ class DeploymentApiIntegrationTest {
 
     private void saveEnvironment(String serviceKey, HttpServer upstream) {
         system(() -> {
-            environments.save(TENANT.tenantId(), serviceKey, new ServiceSettings(
-                    "http://127.0.0.1:" + upstream.getAddress().getPort(), null, Map.of()), "ops");
+            // What operations set up in Hub: the URL of this environment and the secret the model names.
+            tenantVariables.save(TENANT.tenantId(), "url_" + serviceKey,
+                    "http://127.0.0.1:" + upstream.getAddress().getPort(), false, "ops");
+            secrets.create(TENANT.tenantId(), "token_" + serviceKey, "token-" + serviceKey, "ops");
             return null;
         });
     }
@@ -222,18 +230,20 @@ class DeploymentApiIntegrationTest {
         });
     }
 
-    /** What Flow Admin BE sends: BPMN, the design of the called service (no URL, no secret), no rules. */
+    /** What Flow Admin BE sends: BPMN and the model of the called service (references only, no secret), no rules. */
     private static ProcessDeploymentRequest request(String publishId, String processKey, String serviceKey,
                                                     String path) {
         Map<String, Object> service = Map.of(
                 "serviceKey", serviceKey,
                 "name", "CRM",
+                "baseUrl", "${tenant.url_" + serviceKey + "}",
+                "authorization", Map.of("type", "BEARER",
+                        "value", Map.of("source", "SECRET", "value", "token_" + serviceKey)),
                 "operations", List.of(Map.of(
                         "operationKey", "call",
                         "method", "GET",
                         "urlTemplate", path,
-                        "authMode", "NONE",
-                        "authType", "NONE",
+                        "authMode", "INHERIT",
                         "connectTimeoutMillis", 2000,
                         "readTimeoutMillis", 2000,
                         "successStatuses", List.of("200"))));
@@ -269,7 +279,8 @@ class DeploymentApiIntegrationTest {
     private static HttpServer upstream(String name) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
-            CALLS.add(name + ":" + exchange.getRequestURI().getPath());
+            CALLS.add(name + ":" + exchange.getRequestURI().getPath() + ":"
+                    + exchange.getRequestHeaders().getFirst("Authorization"));
             byte[] body = "{}".getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);

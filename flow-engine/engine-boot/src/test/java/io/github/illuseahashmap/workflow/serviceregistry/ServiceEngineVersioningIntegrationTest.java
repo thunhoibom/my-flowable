@@ -1,16 +1,16 @@
 package io.github.illuseahashmap.workflow.serviceregistry;
 
+import io.github.illuseahashmap.workflow.integration.DatabaseScripts;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sun.net.httpserver.HttpServer;
-import io.github.illuseahashmap.serviceregistry.domain.AuthConfig;
 import io.github.illuseahashmap.serviceregistry.domain.AuthType;
 import io.github.illuseahashmap.serviceregistry.domain.HttpMethod;
 import io.github.illuseahashmap.serviceregistry.domain.PublishedOperation;
 import io.github.illuseahashmap.serviceregistry.domain.PublishedService;
-import io.github.illuseahashmap.serviceregistry.domain.ServiceSettings;
 import io.github.illuseahashmap.serviceregistry.engine.ServiceModelJson;
-import io.github.illuseahashmap.serviceregistry.infrastructure.JdbcServiceEnvironmentStore;
+import io.github.illuseahashmap.serviceregistry.infrastructure.JdbcTenantVariableStore;
 import io.github.illuseahashmap.workflow.WorkflowAgentServiceApplication;
 import io.github.illuseahashmap.workflow.shared.context.TrustedDataAccessContext;
 import java.io.IOException;
@@ -58,7 +58,7 @@ class ServiceEngineVersioningIntegrationTest {
     @Autowired
     private TaskService taskService;
     @Autowired
-    private JdbcServiceEnvironmentStore environments;
+    private JdbcTenantVariableStore tenantVariables;
 
     private final java.util.Map<String, PublishedService> designs = new java.util.HashMap<>();
 
@@ -67,8 +67,8 @@ class ServiceEngineVersioningIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.baseline-on-migrate", () -> "true");
-        registry.add("spring.flyway.baseline-version", () -> "0");
+        // Schema is managed by hand (flow-engine/db); tests apply the same scripts.
+        DatabaseScripts.apply(POSTGRES);
         registry.add("flowable.database-schema-update", () -> "true");
         registry.add("flowable.async-executor-activate", () -> "false");
         registry.add("workflow.agent.worker.enabled", () -> "false");
@@ -142,15 +142,17 @@ class ServiceEngineVersioningIntegrationTest {
         assertThat(CALLS).containsExactly("/b");
     }
 
-    /** What Flow Admin BE sends: the design of the service; the environment settings are already on the engine. */
+    /**
+     * What Flow Admin BE sends: the model of the service, whose base URL reads a tenant variable through
+     * Flowable's expression manager; the variable is set on this engine.
+     */
     private void publishService(String serviceKey, String path) {
         system(() -> {
-            environments.save("", serviceKey, new ServiceSettings(
-                    "http://127.0.0.1:" + upstream.getAddress().getPort(), new AuthConfig(AuthType.NONE, null, null),
-                    java.util.Map.of()), "test");
+            tenantVariables.save("", "url_" + serviceKey,
+                    "http://127.0.0.1:" + upstream.getAddress().getPort(), false, "test");
             return null;
         });
-        designs.put(serviceKey, new PublishedService(serviceKey, "CRM", null, List.of(), null, List.of(
+        designs.put(serviceKey, new PublishedService(serviceKey, "CRM", null, "${tenant.url_" + serviceKey + "}", null, List.of(
                 new PublishedOperation("call", HttpMethod.GET, path, AuthType.NONE, null, null, null, 2000,
                         List.of("500"), "CALL_FAILED", List.of(), List.of()))));
     }

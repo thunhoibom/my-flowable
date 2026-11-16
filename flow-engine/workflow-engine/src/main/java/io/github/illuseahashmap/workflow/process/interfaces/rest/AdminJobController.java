@@ -2,7 +2,7 @@ package io.github.illuseahashmap.workflow.process.interfaces.rest;
 
 import io.github.illuseahashmap.workflow.process.application.FailedJobService;
 import io.github.illuseahashmap.workflow.process.application.dto.FailedJobView;
-import io.github.illuseahashmap.workflow.shared.context.AdminRoles;
+import io.github.illuseahashmap.workflow.shared.context.ApiRoles;
 import io.github.illuseahashmap.workflow.shared.response.ApiResponse;
 import io.github.illuseahashmap.workflow.shared.response.PageResult;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,7 +29,7 @@ public class AdminJobController {
     }
 
     @GetMapping
-    @PreAuthorize(AdminRoles.READ)
+    @PreAuthorize(ApiRoles.READ)
     public ApiResponse<PageResult<FailedJobView>> page(@RequestParam(defaultValue = "1") Integer pageNum,
                                                        @RequestParam(defaultValue = "20") Integer pageSize,
                                                        @RequestParam(required = false) String processInstanceId) {
@@ -37,20 +37,20 @@ public class AdminJobController {
     }
 
     @GetMapping("/{jobId}/stacktrace")
-    @PreAuthorize(AdminRoles.READ)
+    @PreAuthorize(ApiRoles.READ)
     public ApiResponse<String> stacktrace(@PathVariable String jobId) {
         return ApiResponse.ok(failedJobs.stacktrace(jobId));
     }
 
     @PostMapping("/{jobId}/retry")
-    @PreAuthorize(AdminRoles.OPERATE)
+    @PreAuthorize(ApiRoles.OPERATE)
     public ApiResponse<Void> retry(@PathVariable String jobId, @RequestBody(required = false) RetryRequest request) {
         failedJobs.retry(jobId, request == null || request.retries() == null ? DEFAULT_RETRIES : request.retries());
         return ApiResponse.ok();
     }
 
     @DeleteMapping("/{jobId}")
-    @PreAuthorize(AdminRoles.MANAGE)
+    @PreAuthorize(ApiRoles.MANAGE)
     public ApiResponse<Void> delete(@PathVariable String jobId) {
         failedJobs.delete(jobId);
         return ApiResponse.ok();

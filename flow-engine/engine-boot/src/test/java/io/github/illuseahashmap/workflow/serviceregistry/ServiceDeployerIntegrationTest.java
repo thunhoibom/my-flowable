@@ -1,5 +1,7 @@
 package io.github.illuseahashmap.workflow.serviceregistry;
 
+import io.github.illuseahashmap.workflow.integration.DatabaseScripts;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -50,8 +52,8 @@ class ServiceDeployerIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.baseline-on-migrate", () -> "true");
-        registry.add("spring.flyway.baseline-version", () -> "0");
+        // Schema is managed by hand (flow-engine/db); tests apply the same scripts.
+        DatabaseScripts.apply(POSTGRES);
         registry.add("flowable.database-schema-update", () -> "true");
         registry.add("flowable.async-executor-activate", () -> "false");
         registry.add("workflow.agent.worker.enabled", () -> "false");
@@ -112,7 +114,7 @@ class ServiceDeployerIntegrationTest {
     }
 
     private static PublishedService service(String key, String path) {
-        return new PublishedService(key, key, null, List.of(), null, List.of(new PublishedOperation(
+        return new PublishedService(key, key, null, null, null, List.of(new PublishedOperation(
                 "call", HttpMethod.GET, path, AuthType.NONE, null, null, null, 1000, List.of("500"), "FAILED",
                 List.of(), List.of())));
     }

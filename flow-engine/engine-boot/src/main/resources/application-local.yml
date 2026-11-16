@@ -3,9 +3,6 @@ spring:
     url: ${WORKFLOW_DB_URL:jdbc:postgresql://localhost:5432/workflow_agent}
     username: ${WORKFLOW_DB_USERNAME:postgres}
     password: ${WORKFLOW_DB_PASSWORD:root}
-  flyway:
-    baseline-on-migrate: true
-    baseline-version: 0
 flowable:
   database-schema-update: true
 

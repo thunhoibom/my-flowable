@@ -24,11 +24,11 @@ class OauthClientCredentialsTest {
             assertEquals(true, request.body().contains("scope=read"));
             return new TransportResponse(200, "{\"access_token\":\"tok\",\"expires_in\":90}");
         }, clock);
-        assertEquals("tok", oauth.accessToken(operation()));
-        assertEquals("tok", oauth.accessToken(operation()));
+        assertEquals("tok", oauth.accessToken(client(), 1000));
+        assertEquals("tok", oauth.accessToken(client(), 1000));
         assertEquals(1, calls.get());
         clock.advance(60);
-        assertEquals("tok", oauth.accessToken(operation()));
+        assertEquals("tok", oauth.accessToken(client(), 1000));
         assertEquals(2, calls.get());
     }
 
@@ -37,16 +37,11 @@ class OauthClientCredentialsTest {
         var oauth = new OauthClientCredentials(
                 request -> new TransportResponse(401, "{\"error\":\"invalid_client\"}"),
                 Clock.systemUTC());
-        assertThrows(IOException.class, () -> oauth.accessToken(operation()));
+        assertThrows(IOException.class, () -> oauth.accessToken(client(), 1000));
     }
 
-    private static PublishedOperation operation() {
-        return new PublishedOperation(
-                "createLead", HttpMethod.POST, "https://crm.example/leads",
-                AuthMode.OVERRIDE, AuthType.OAUTH2_CLIENT, null, "s3cret", null,
-                1000, 1000, List.of(), List.of(), List.of(), List.of(),
-                ContentType.JSON, null, List.of(), BodyPresence.NONE, ApiKeyLocation.HEADER,
-                new AuthDetails("https://auth.example/token", "crm", List.of("read"), null, null, null, null, null, null));
+    private static OauthClientCredentials.Client client() {
+        return new OauthClientCredentials.Client("https://auth.example/token", "crm", "s3cret", List.of("read"));
     }
 
     private static final class MutableClock extends Clock {

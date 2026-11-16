@@ -5,7 +5,7 @@ import io.github.illuseahashmap.workflow.assignment.application.dto.AssignmentRu
 import io.github.illuseahashmap.workflow.assignment.application.dto.AssignmentRuleInheritCommand;
 import io.github.illuseahashmap.workflow.assignment.application.dto.AssignmentRuleInheritResult;
 import io.github.illuseahashmap.workflow.assignment.application.dto.AssignmentRuleView;
-import io.github.illuseahashmap.workflow.shared.context.AdminRoles;
+import io.github.illuseahashmap.workflow.shared.context.ApiRoles;
 import io.github.illuseahashmap.workflow.shared.response.ApiResponse;
 import io.github.illuseahashmap.workflow.shared.response.PageResult;
 import jakarta.validation.Valid;
@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/admin/assignment-rules")
-@PreAuthorize(AdminRoles.MANAGE)
+@PreAuthorize(ApiRoles.MANAGE)
 public class AdminAssignmentRuleController {
 
     private final AssignmentRuleService rules;

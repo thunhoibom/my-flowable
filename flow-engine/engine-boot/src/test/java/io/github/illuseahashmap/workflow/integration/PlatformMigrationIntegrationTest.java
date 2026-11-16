@@ -3,15 +3,17 @@ package io.github.illuseahashmap.workflow.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import org.flywaydb.core.Flyway;
+import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PSQLException;
+import org.springframework.core.io.Resource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -23,26 +25,21 @@ class PlatformMigrationIntegrationTest {
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17-alpine");
 
     @BeforeAll
-    static void migrateDatabase() {
-        Flyway.configure()
-                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-                .locations("classpath:db/migration/platform")
-                .load()
-                .migrate();
+    static void applyDatabaseScripts() {
+        DatabaseScripts.apply(POSTGRES);
     }
 
     @Test
-    void migratesCleanDatabaseThroughLatestPlatformVersion() throws SQLException {
-        try (Connection connection = connection();
-             Statement statement = connection.createStatement();
-             ResultSet resultSet = statement.executeQuery("""
-                     SELECT COUNT(*)
-                     FROM flyway_schema_history
-                     WHERE success = TRUE AND version IS NOT NULL
-                     """)) {
-            assertThat(resultSet.next()).isTrue();
-            assertThat(resultSet.getInt(1)).isEqualTo(43);
+    void scriptsAreNumberedWithoutGapsOrDuplicates() throws IOException {
+        List<String> names = DatabaseScripts.scripts().stream().map(Resource::getFilename).toList();
+        assertThat(names).hasSize(47);
+        for (int i = 0; i < names.size(); i++) {
+            assertThat(names.get(i)).startsWith("V" + (i + 1) + "__");
         }
+    }
+
+    @Test
+    void appliesAllScriptsToCleanDatabase() throws SQLException {
         assertThat(tableExists("workflow_event_registry_draft")).isTrue();
         assertThat(tableExists("workflow_event_registry_release")).isTrue();
         assertThat(tableExists("workflow_event_reference")).isTrue();
@@ -57,7 +54,10 @@ class PlatformMigrationIntegrationTest {
         assertThat(tableExists("auth_attempt_guard")).isTrue();
         assertThat(tableExists("agent_definition")).isTrue();
         assertThat(tableExists("agent_definition_version")).isTrue();
-        assertThat(tableExists("work_service_environment")).isTrue();
+        assertThat(tableExists("work_service_environment")).isFalse();
+        assertThat(tableExists("work_secret")).isTrue();
+        assertThat(tableExists("work_oauth2_client")).isTrue();
+        assertThat(tableExists("work_tenant_variable")).isTrue();
         assertThat(tableExists("agent_provider")).isTrue();
         assertThat(tableExists("agent_run")).isTrue();
         assertThat(tableExists("agent_model_invocation")).isTrue();
@@ -134,12 +134,13 @@ class PlatformMigrationIntegrationTest {
                      WHERE relname IN ('workflow_tenant', 'agent_run', 'workflow_node_assignment_rule',
                                        'workflow_process_draft', 'workflow_process_release',
                                        'workflow_call_reference', 'workflow_event_registry_draft',
-                                       'workflow_event_registry_release', 'workflow_event_reference')
+                                       'workflow_event_registry_release', 'workflow_event_reference',
+                                       'work_secret', 'work_oauth2_client', 'work_tenant_variable')
                        AND relrowsecurity = TRUE
                        AND relforcerowsecurity = TRUE
                      """)) {
             assertThat(resultSet.next()).isTrue();
-            assertThat(resultSet.getInt(1)).isEqualTo(9);
+            assertThat(resultSet.getInt(1)).isEqualTo(12);
         }
     }
 

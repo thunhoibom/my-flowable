@@ -1,22 +1,18 @@
 package io.github.illuseahashmap.serviceregistry.domain;
 
-/**
- * Picks the credentials for one operation.
- * The first auth argument is the service snapshot; the second is the operation's own credentials.
- */
+/** Picks the authorization of one operation, as Flowable does: the model's, or the operation's own override. */
 public final class AuthInheritance {
 
     private AuthInheritance() {
     }
 
-    public static AuthConfig resolve(AuthMode mode, AuthConfig shared, AuthConfig operation) {
-        AuthMode effective = mode == null ? AuthMode.OVERRIDE : mode;
+    public static Authorization resolve(AuthMode mode, Authorization service, Authorization operation) {
+        AuthMode effective = mode == null ? AuthMode.INHERIT : mode;
         return switch (effective) {
-            // A published operation keeps the shared secret from the snapshot, not the current draft.
-            case INHERIT -> shared;
-            case OVERRIDE -> operation;
-            // NONE suppresses shared credentials for a public operation on a protected service.
-            case NONE -> new AuthConfig(AuthType.NONE, null, null);
+            case INHERIT -> Authorization.orNone(service);
+            case OVERRIDE -> Authorization.orNone(operation);
+            // NONE suppresses the service authorization for a public operation on a protected service.
+            case NONE -> Authorization.NONE;
         };
     }
 }

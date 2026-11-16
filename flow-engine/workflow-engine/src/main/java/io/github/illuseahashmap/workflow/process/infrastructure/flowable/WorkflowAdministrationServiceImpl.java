@@ -70,11 +70,6 @@ public class WorkflowAdministrationServiceImpl implements WorkflowAdministration
     }
 
     @Override
-    public byte[] generateProcessDiagram(String processInstanceId) {
-        return instanceReadService.generateDiagram(processInstanceId);
-    }
-
-    @Override
     public ProcessDiagramDataView getProcessDiagramData(String processInstanceId) {
         return instanceReadService.diagramData(processInstanceId);
     }

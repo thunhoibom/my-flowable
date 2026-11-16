@@ -30,7 +30,7 @@ class JdbcCallReferenceRepositoryTest {
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
              Statement statement = connection.createStatement()) {
             String sql = new String(JdbcCallReferenceRepositoryTest.class.getResourceAsStream(
-                    "/db/migration/platform/V39__workflow_call_reference.sql").readAllBytes(), StandardCharsets.UTF_8);
+                    "/db/V39__workflow_call_reference.sql").readAllBytes(), StandardCharsets.UTF_8);
             for (String command : sql.split(";")) {
                 if (!command.isBlank()) {
                     statement.execute(command);

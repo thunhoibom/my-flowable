@@ -34,7 +34,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +54,7 @@ class ProcessDeploymentServiceImplTest {
 
     private static ProcessEngine engine;
     private AssignmentRuleService rules;
-    private final Set<String> environments = new HashSet<>();
+    private final Set<String> configured = new HashSet<>();
     private ProcessDeploymentServiceImpl service;
 
     @BeforeAll
@@ -89,7 +88,7 @@ class ProcessDeploymentServiceImplTest {
         rules = mock(AssignmentRuleService.class);
         ServiceDeploymentSupport serviceSupport = new ServiceDeploymentSupport() {
             @Override
-            public byte[] designOnly(String serviceKey, Map<String, Object> definition) {
+            public byte[] serviceResource(String serviceKey, Map<String, Object> definition) {
                 if (!serviceKey.equals(definition.get("serviceKey"))) {
                     throw new IllegalArgumentException("serviceKey không khớp");
                 }
@@ -98,9 +97,10 @@ class ProcessDeploymentServiceImplTest {
             }
 
             @Override
-            public Set<String> withoutEnvironment(String tenantId, Collection<String> serviceKeys) {
-                Set<String> missing = new TreeSet<>(serviceKeys);
-                missing.removeAll(environments);
+            public Set<String> missingConfiguration(String tenantId, Map<String, byte[]> services) {
+                Set<String> missing = new TreeSet<>();
+                services.keySet().stream().filter(serviceKey -> !configured.contains(serviceKey))
+                        .forEach(serviceKey -> missing.add("secret " + serviceKey + "Token"));
                 return missing;
             }
         };
@@ -112,7 +112,7 @@ class ProcessDeploymentServiceImplTest {
     @Test
     void deploysBpmnWithTheServicesItCallsAndUsesThePublishIdAsDeploymentKey() {
         String key = key();
-        environments.add("crm");
+        configured.add("crm");
         String publishId = UUID.randomUUID().toString();
 
         ProcessDeploymentResult result = service.deploy(request(publishId, key, serviceTaskXml(key, "crm"),
@@ -147,16 +147,16 @@ class ProcessDeploymentServiceImplTest {
     }
 
     @Test
-    void rejectsServicesMissingFromTheRequestOrWithoutEnvironment() {
+    void rejectsServicesMissingFromTheRequestOrTheirConfiguration() {
         String key = key();
-        environments.add("crm");
+        configured.add("crm");
 
         assertThatThrownBy(() -> service.deploy(request(UUID.randomUUID().toString(), key,
                 serviceTaskXml(key, "crm"), List.of(), List.of())))
                 .hasMessageContaining("Thiếu định nghĩa").hasMessageContaining("crm");
         assertThatThrownBy(() -> service.deploy(request(UUID.randomUUID().toString(), key,
                 serviceTaskXml(key, "erp"), List.of(Map.of("serviceKey", "erp", "v", 1)), List.of())))
-                .hasMessageContaining("cấu hình môi trường").hasMessageContaining("erp");
+                .hasMessageContaining("thiếu cấu hình").hasMessageContaining("secret erpToken");
         assertThatThrownBy(() -> service.deploy(request(UUID.randomUUID().toString(), key,
                 serviceTaskXml(key, "crm"), List.of(Map.of("serviceKey", "other", "v", 1),
                         Map.of("v", 1)), List.of())))

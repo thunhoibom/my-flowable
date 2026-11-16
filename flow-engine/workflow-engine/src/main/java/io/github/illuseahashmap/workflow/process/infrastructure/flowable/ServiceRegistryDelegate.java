@@ -84,18 +84,11 @@ public class ServiceRegistryDelegate implements JavaDelegate {
         Map<String, String> expressions = readField(attribute(binding, "inputMapping"), "expression");
         Map<String, String> variables = readField(attribute(binding, "outputMapping"), "variable");
         Map<String, Object> resolved = resolveInputs(execution, serviceKey, operationKey, contract, expressions);
-        // The bearer token is a process variable, not an input mapped on the node.
-        if (contract.bearerVariable() != null
-                && !contract.bearerVariable().isBlank()
-                && !resolved.containsKey(contract.bearerVariable())) {
-            Object token = execution.getVariable(contract.bearerVariable());
-            if (token != null) {
-                resolved.put(contract.bearerVariable(), token);
-            }
-        }
         Map<String, Object> result;
         try {
-            result = gateway.invoke(scope, serviceKey, operationKey, resolved);
+            // Base URL and credential expressions of the service model run on this execution, like input mappings.
+            result = gateway.invoke(scope, serviceKey, operationKey, resolved,
+                    expression -> modelExpression(execution, serviceKey, operationKey, expression));
         } catch (ServiceRegistryCallException exception) {
             throw new BpmnError(exception.bpmnErrorCode());
         }
@@ -222,6 +215,18 @@ public class ServiceRegistryDelegate implements JavaDelegate {
             }
         }
         return outputs;
+    }
+
+    private String modelExpression(DelegateExecution execution, String serviceKey, String operationKey,
+                                   String expression) {
+        Object value;
+        try {
+            value = expressionManager.createExpression(expression).getValue(execution);
+        } catch (RuntimeException exception) {
+            throw new ServiceParameterException(failure(serviceKey, operationKey, "service model",
+                    "expression failed: " + expression), exception);
+        }
+        return value == null ? null : String.valueOf(value);
     }
 
     private Object evaluate(DelegateExecution execution, String expression) {

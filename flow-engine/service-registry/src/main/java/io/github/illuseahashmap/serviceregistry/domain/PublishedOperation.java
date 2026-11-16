@@ -5,6 +5,11 @@ import java.util.List;
 /**
  * One published operation. Timeouts are split so a slow server can use a longer read timeout
  * than the connect timeout. Existing callers still use the 12-argument constructor.
+ *
+ * <p>{@code authMode} and {@code authorization} are the model: whether the operation inherits the service's
+ * authorization, uses its own, or sends none. {@code authType}, {@code apiKeyHeader}, {@code secret},
+ * {@code apiKeyLocation} and {@code authDetails} are the credentials resolved for one call; they are always
+ * empty in a deployment.
  */
 public record PublishedOperation(
         String operationKey,
@@ -27,9 +32,11 @@ public record PublishedOperation(
         BodyPresence bodyPresence,
         ApiKeyLocation apiKeyLocation,
         AuthDetails authDetails,
-        StepConfig steps
+        StepConfig steps,
+        Authorization authorization
 ) {
     public PublishedOperation {
+        authorization = Authorization.orNone(authorization);
         errorRules = errorRules == null ? List.of() : List.copyOf(errorRules);
         successStatuses = successStatuses == null ? List.of() : List.copyOf(successStatuses);
         inputs = inputs == null ? List.of() : List.copyOf(inputs);
@@ -261,22 +268,38 @@ public record PublishedOperation(
                 bodyPresence,
                 resolved.apiKeyLocation(),
                 resolved.details(),
-                steps);
+                steps,
+                authorization);
     }
 
     /** Replaces pagination and callback settings without dropping the request contract. */
     public PublishedOperation withSteps(StepConfig steps) {
+        return copy(authMode, readTimeoutMillis, steps == null ? StepConfig.sync() : steps, authorization);
+    }
+
+    /** Replaces the operation's own authorization (the model, not resolved credentials). */
+    public PublishedOperation withAuthorization(AuthMode mode, Authorization authorization) {
+        return copy(mode, readTimeoutMillis, steps, authorization);
+    }
+
+    /** Replaces the read timeout, e.g. from a {@code rest-settings} override of this Flow Engine. */
+    public PublishedOperation withReadTimeout(int readTimeoutMillis) {
+        return copy(authMode, readTimeoutMillis, steps, authorization);
+    }
+
+    private PublishedOperation copy(AuthMode mode, int readTimeout, StepConfig stepConfig,
+                                    Authorization ownAuthorization) {
         return new PublishedOperation(
                 operationKey,
                 method,
                 urlTemplate,
-                authMode,
+                mode,
                 authType,
                 apiKeyHeader,
                 secret,
                 bodyTemplate,
                 connectTimeoutMillis,
-                readTimeoutMillis,
+                readTimeout,
                 errorRules,
                 successStatuses,
                 inputs,
@@ -287,6 +310,35 @@ public record PublishedOperation(
                 bodyPresence,
                 apiKeyLocation,
                 authDetails,
-                steps == null ? StepConfig.sync() : steps);
+                stepConfig,
+                ownAuthorization);
+    }
+
+    /** Every field but the model authorization, which stays none. */
+    public PublishedOperation(
+            String operationKey,
+            HttpMethod method,
+            String urlTemplate,
+            AuthMode authMode,
+            AuthType authType,
+            String apiKeyHeader,
+            String secret,
+            String bodyTemplate,
+            int connectTimeoutMillis,
+            int readTimeoutMillis,
+            List<ErrorRule> errorRules,
+            List<String> successStatuses,
+            List<InputParameter> inputs,
+            List<OutputParameter> outputs,
+            ContentType contentType,
+            String rawMediaType,
+            List<StaticHeader> staticHeaders,
+            BodyPresence bodyPresence,
+            ApiKeyLocation apiKeyLocation,
+            AuthDetails authDetails,
+            StepConfig steps) {
+        this(operationKey, method, urlTemplate, authMode, authType, apiKeyHeader, secret, bodyTemplate,
+                connectTimeoutMillis, readTimeoutMillis, errorRules, successStatuses, inputs, outputs, contentType,
+                rawMediaType, staticHeaders, bodyPresence, apiKeyLocation, authDetails, steps, null);
     }
 }

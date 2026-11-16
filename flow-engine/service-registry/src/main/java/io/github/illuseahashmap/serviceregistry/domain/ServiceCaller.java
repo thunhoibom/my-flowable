@@ -3,7 +3,6 @@ package io.github.illuseahashmap.serviceregistry.domain;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -15,15 +14,9 @@ public final class ServiceCaller {
     private static final int MAX_LOGGED_BODY_LENGTH = 2000;
 
     private final HttpTransport transport;
-    private final OauthClientCredentials oauth;
 
     public ServiceCaller(HttpTransport transport) {
-        this(transport, new OauthClientCredentials(transport, Clock.systemUTC()));
-    }
-
-    ServiceCaller(HttpTransport transport, OauthClientCredentials oauth) {
         this.transport = transport;
-        this.oauth = oauth;
     }
 
     public CallOutcome call(PublishedOperation operation, Map<String, Object> resolvedInputs) {
@@ -71,17 +64,6 @@ public final class ServiceCaller {
 
     private Sent send(PublishedOperation operation, OutboundRequest request) {
         // Slice 1 stores retry policy but still makes one attempt per page.
-        if (operation.authType() == AuthType.OAUTH2_CLIENT) {
-            try {
-                // The token is not logged. Authorization is added after the request is built.
-                request.headers().put("Authorization", "Bearer " + oauth.accessToken(operation));
-            } catch (InvalidServiceRequestException exception) {
-                throw exception;
-            } catch (IOException exception) {
-                LOGGER.warn("Service call failed before a response operation={}", operation.operationKey());
-                return new Sent(new CallOutcome("SERVICE_UNAVAILABLE", Map.of()), null);
-            }
-        }
         LOGGER.info(
                 "Service call request operation={} method={} url={} body={}",
                 operation.operationKey(),

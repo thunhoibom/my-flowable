@@ -8,7 +8,7 @@ import io.github.illuseahashmap.workflow.process.application.dto.ProcessInstance
 import io.github.illuseahashmap.workflow.process.application.dto.ProcessWaitView;
 import io.github.illuseahashmap.workflow.process.application.dto.TerminateProcessRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.TriggerReceiveTaskRequest;
-import io.github.illuseahashmap.workflow.shared.context.AdminRoles;
+import io.github.illuseahashmap.workflow.shared.context.ApiRoles;
 import io.github.illuseahashmap.workflow.shared.response.ApiResponse;
 import io.github.illuseahashmap.workflow.shared.response.PageResult;
 import jakarta.validation.Valid;
@@ -39,7 +39,7 @@ public class AdminProcessInstanceController {
     }
 
     @GetMapping
-    @PreAuthorize(AdminRoles.READ)
+    @PreAuthorize(ApiRoles.READ)
     public ApiResponse<PageResult<ProcessInstanceSummaryView>> page(
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "20") Integer pageSize,
@@ -54,25 +54,25 @@ public class AdminProcessInstanceController {
     }
 
     @GetMapping("/{processInstanceId}")
-    @PreAuthorize(AdminRoles.READ)
+    @PreAuthorize(ApiRoles.READ)
     public ApiResponse<ProcessInstanceDetailView> detail(@PathVariable String processInstanceId) {
         return ApiResponse.ok(administration.getProcessInstanceDetail(processInstanceId));
     }
 
     @GetMapping("/{processInstanceId}/diagram-data")
-    @PreAuthorize(AdminRoles.READ)
+    @PreAuthorize(ApiRoles.READ)
     public ApiResponse<ProcessDiagramDataView> diagramData(@PathVariable String processInstanceId) {
         return ApiResponse.ok(administration.getProcessDiagramData(processInstanceId));
     }
 
     @GetMapping("/{processInstanceId}/waits")
-    @PreAuthorize(AdminRoles.READ)
+    @PreAuthorize(ApiRoles.READ)
     public ApiResponse<List<ProcessWaitView>> waits(@PathVariable String processInstanceId) {
         return ApiResponse.ok(receiveTasks.waits(processInstanceId));
     }
 
     @PostMapping("/{processInstanceId}/terminate")
-    @PreAuthorize(AdminRoles.OPERATE)
+    @PreAuthorize(ApiRoles.OPERATE)
     public ApiResponse<Void> terminate(@PathVariable String processInstanceId,
                                        @Valid @RequestBody ReasonRequest request) {
         administration.terminateProcessInstance(new TerminateProcessRequest(processInstanceId, request.reason()));
@@ -81,7 +81,7 @@ public class AdminProcessInstanceController {
 
     /** Continues a manual wait step (receive task). */
     @PostMapping("/{processInstanceId}/receive-tasks/{activityId}/trigger")
-    @PreAuthorize(AdminRoles.OPERATE)
+    @PreAuthorize(ApiRoles.OPERATE)
     public ApiResponse<Void> trigger(@PathVariable String processInstanceId, @PathVariable String activityId,
                                      @Valid @RequestBody TriggerRequest request) {
         receiveTasks.trigger(new TriggerReceiveTaskRequest(processInstanceId, activityId, request.executionId(),

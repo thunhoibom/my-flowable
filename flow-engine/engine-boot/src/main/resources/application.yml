@@ -9,10 +9,6 @@ spring:
     username: ${WORKFLOW_DB_USERNAME}
     password: ${WORKFLOW_DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
-  flyway:
-    enabled: true
-    baseline-on-migrate: false
-    baseline-version: 0
 
 server:
   port: 8080

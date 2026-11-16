@@ -2,6 +2,7 @@ package io.github.illuseahashmap.workflow.auth.interfaces.rest;
 
 import io.github.illuseahashmap.workflow.auth.application.UserDirectoryService;
 import io.github.illuseahashmap.workflow.auth.application.dto.DirectoryUserView;
+import io.github.illuseahashmap.workflow.shared.context.ApiRoles;
 import io.github.illuseahashmap.workflow.shared.response.ApiResponse;
 import io.github.illuseahashmap.workflow.shared.response.PageResult;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -10,8 +11,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** Runtime API: users of the current tenant, to hand a task to (Work area). */
 @RestController
-@RequestMapping("/auth/directory")
+@RequestMapping("/api/runtime/directory")
 public class UserDirectoryController {
 
     private final UserDirectoryService userDirectoryService;
@@ -21,7 +23,7 @@ public class UserDirectoryController {
     }
 
     @GetMapping("/users")
-    @PreAuthorize("hasAnyRole('WF_PLATFORM_ADMIN', 'WF_ADMIN', 'WF_OPERATOR')")
+    @PreAuthorize(ApiRoles.OPERATE)
     public ApiResponse<PageResult<DirectoryUserView>> users(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Integer pageNum,

@@ -3,7 +3,7 @@ package io.github.illuseahashmap.workflow.eventregistry.interfaces.rest;
 import io.github.illuseahashmap.workflow.eventregistry.application.EventWaitQueryService;
 import io.github.illuseahashmap.workflow.eventregistry.application.dto.EventUsagesView;
 import io.github.illuseahashmap.workflow.eventregistry.application.dto.EventWaitView;
-import io.github.illuseahashmap.workflow.shared.context.AdminRoles;
+import io.github.illuseahashmap.workflow.shared.context.ApiRoles;
 import io.github.illuseahashmap.workflow.shared.response.ApiResponse;
 import io.github.illuseahashmap.workflow.shared.response.PageResult;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,13 +25,13 @@ public class AdminEventController {
     }
 
     @GetMapping("/{key}/usages")
-    @PreAuthorize(AdminRoles.READ)
+    @PreAuthorize(ApiRoles.READ)
     public ApiResponse<EventUsagesView> usages(@PathVariable String key) {
         return ApiResponse.ok(waits.usages(key));
     }
 
     @GetMapping("/{key}/waits")
-    @PreAuthorize(AdminRoles.READ)
+    @PreAuthorize(ApiRoles.READ)
     public ApiResponse<PageResult<EventWaitView>> waits(@PathVariable String key,
                                                         @RequestParam(defaultValue = "1") int page,
                                                         @RequestParam(defaultValue = "20") int size) {

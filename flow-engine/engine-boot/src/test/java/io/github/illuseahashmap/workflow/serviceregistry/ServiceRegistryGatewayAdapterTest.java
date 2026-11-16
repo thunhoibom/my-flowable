@@ -2,6 +2,8 @@ package io.github.illuseahashmap.workflow.serviceregistry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import io.github.illuseahashmap.serviceregistry.application.PublishedServiceInvoker;
@@ -35,20 +37,20 @@ class ServiceRegistryGatewayAdapterTest {
 
     @Test
     void returnsMappedVariables() {
-        when(invoker.invoke("t1", "p1", "crm", "createLead", Map.of()))
+        when(invoker.invoke(eq("t1"), eq("p1"), eq("crm"), eq("createLead"), eq(Map.of()), any()))
                 .thenReturn(Map.of("leadId", "L1"));
         var adapter = new ServiceRegistryGatewayAdapter(invoker);
 
-        assertThat(adapter.invoke(SCOPE, "crm", "createLead", Map.of())).containsEntry("leadId", "L1");
+        assertThat(adapter.invoke(SCOPE, "crm", "createLead", Map.of(), expression -> expression)).containsEntry("leadId", "L1");
     }
 
     @Test
     void mapsInvokerFailureToBpmnError() {
-        when(invoker.invoke("t1", "p1", "crm", "createLead", Map.of()))
+        when(invoker.invoke(eq("t1"), eq("p1"), eq("crm"), eq("createLead"), eq(Map.of()), any()))
                 .thenThrow(new ServiceCallException("HTTP_ERROR"));
         var adapter = new ServiceRegistryGatewayAdapter(invoker);
 
-        assertThatThrownBy(() -> adapter.invoke(SCOPE, "crm", "createLead", Map.of()))
+        assertThatThrownBy(() -> adapter.invoke(SCOPE, "crm", "createLead", Map.of(), expression -> expression))
                 .isInstanceOfSatisfying(ServiceRegistryCallException.class,
                         error -> assertThat(error.bpmnErrorCode()).isEqualTo("HTTP_ERROR"));
     }
@@ -61,21 +63,21 @@ class ServiceRegistryGatewayAdapterTest {
                 List.of(new InputParameter("name", ParameterType.STRING, true, ParameterLocation.BODY)),
                 List.of(new OutputParameter("id", ParameterType.LONG, "id")));
         when(invoker.findPublished("t1", "p1", "crm", "createLead")).thenReturn(Optional.of(operation));
-        when(invoker.invoke("t1", "p1", "crm", "createLead", Map.of("name", "Ann"))).thenReturn(Map.of("id", 4));
+        when(invoker.invoke(eq("t1"), eq("p1"), eq("crm"), eq("createLead"), eq(Map.of("name", "Ann")), any())).thenReturn(Map.of("id", 4));
         var adapter = new ServiceRegistryGatewayAdapter(invoker);
 
         assertThat(adapter.findPublished(SCOPE, "crm", "createLead")).hasValueSatisfying(contract ->
                 assertThat(contract.inputs().getFirst().required()).isTrue());
-        assertThat(adapter.invoke(SCOPE, "crm", "createLead", Map.of("name", "Ann"))).containsEntry("id", 4);
+        assertThat(adapter.invoke(SCOPE, "crm", "createLead", Map.of("name", "Ann"), expression -> expression)).containsEntry("id", 4);
     }
 
     @Test
     void mapsInvalidRequestToParameterException() {
-        when(invoker.invoke("t1", "p1", "crm", "createLead", Map.of()))
+        when(invoker.invoke(eq("t1"), eq("p1"), eq("crm"), eq("createLead"), eq(Map.of()), any()))
                 .thenThrow(new InvalidServiceRequestException("URL still contains a placeholder"));
         var adapter = new ServiceRegistryGatewayAdapter(invoker);
 
-        assertThatThrownBy(() -> adapter.invoke(SCOPE, "crm", "createLead", Map.of()))
+        assertThatThrownBy(() -> adapter.invoke(SCOPE, "crm", "createLead", Map.of(), expression -> expression))
                 .isInstanceOf(ServiceParameterException.class)
                 .hasMessageContaining("crm")
                 .hasMessageContaining("createLead")

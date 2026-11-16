@@ -10,8 +10,6 @@ import io.github.illuseahashmap.workflow.shared.response.PageResult;
 
 public interface WorkflowAdministrationService {
 
-    byte[] generateProcessDiagram(String processInstanceId);
-
     ProcessDiagramDataView getProcessDiagramData(String processInstanceId);
 
     PageResult<ProcessDefinitionSummaryView> pageProcessDefinitions(

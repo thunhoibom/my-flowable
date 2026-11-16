@@ -24,18 +24,18 @@
 
 ### 3.1 发起流程
 
-1. 前端调用 `POST /workflow/process/interaction`，提交定义标识和已有业务变量。
+1. 前端调用 `POST /api/runtime/process/interaction`，提交定义标识和已有业务变量。
 2. 后端按当前变量计算真实首个 Agent frontier。
 3. 后端读取已发布 Agent 输入 Schema 和 BPMN 输入映射，返回业务字段。
 4. 用户填写字段；前端转换为结构化流程变量。
-5. `POST /workflow/process/start` 在事务开始前再次执行同一契约校验，绕过前端的系统调用也不能提交缺失的必填输入。
+5. `POST /api/runtime/process/start` 在事务开始前再次执行同一契约校验，绕过前端的系统调用也不能提交缺失的必填输入。
 
 ### 3.2 审批任务
 
-1. 前端调用 `POST /workflow/task/interaction`，后端合并现有流程变量与本次覆盖值。
+1. 前端调用 `POST /api/runtime/task/interaction`，后端合并现有流程变量与本次覆盖值。
 2. 仅当审批后的真实路径首先到达 Agent 时返回交互字段。
 3. 前端提交字段后重新计算参与人要求，避免变量改变网关路径后使用过期预览。
-4. `POST /workflow/task/approve` 在完成用户任务前再次执行契约校验。
+4. `POST /api/runtime/task/approve` 在完成用户任务前再次执行契约校验。
 
 驳回当前只回到用户任务，不复用“审批后 Agent”契约。未来新增可配置驳回路径时，必须把 action 和目标节点纳入交互请求，而不是在前端推断。
 

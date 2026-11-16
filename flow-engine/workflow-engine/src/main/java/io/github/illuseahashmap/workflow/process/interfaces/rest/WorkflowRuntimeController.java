@@ -29,8 +29,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Runtime API ({@code /api/runtime/**}): the Work area of Flow Admin, and systems that call with a service token.
+ */
 @RestController
-@RequestMapping("/workflow")
+@RequestMapping("/api/runtime")
 public class WorkflowRuntimeController {
 
     private final WorkflowRuntimeService workflowRuntimeService;

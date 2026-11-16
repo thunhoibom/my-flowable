@@ -12,7 +12,6 @@ Overall architecture of Flow Admin, Flow Admin BE and Flow Engine: `F:\flowable\
 - Flowable 8.0.0
 - PostgreSQL
 - Redis
-- Flyway
 
 ## Modules
 
@@ -24,7 +23,7 @@ flow-engine
 |-- workflow-engine  Workflow domain, use cases, and Flowable adapters
 |-- rules-engine      Reusable condition and priority rule engine
 |-- agent-engine      Agent definitions, reliable runtime, providers, retrieval, and guardrails
-|-- engine-migrations Ordered platform schema and cross-context integrity migrations
+|-- db               Ordered SQL scripts for DB changes, applied by hand (no Flyway)
 `-- engine-boot    Executable application and module composition root
 ```
 
@@ -33,14 +32,13 @@ Module dependency direction:
 ```text
 engine-boot --> auth-engine --> shared-kernel
 engine-boot --> workflow-engine --> shared-kernel
-engine-boot --> engine-migrations
 workflow-engine --> rules-engine
 agent-engine --> shared-kernel
 ```
 
 `auth-engine`, `workflow-engine`, and `agent-engine` follow bounded-context-oriented DDD. The executable application,
-HTTP security chain, global exception translation, and Flyway composition live only in `engine-boot`.
-All ordered schema changes live in `engine-migrations`; business modules do not coordinate global Flyway versions.
+HTTP security chain and global exception translation live only in `engine-boot`.
+The application never changes the schema itself: every DB change is an SQL script in `db/`, applied by hand (see `db/README.md`).
 
 ```text
 io.github.illuseahashmap.workflow
@@ -121,7 +119,7 @@ The payload is:
   "timestamp": 1785484800,
   "nonce": "unique-request-nonce",
   "method": "POST",
-  "path": "/workflow/process/start",
+  "path": "/api/runtime/process/start",
   "bodySha256": "sha256-hex-of-request-body",
   "tokenVersion": 1
 }
@@ -169,8 +167,8 @@ WORKFLOW_DB_USERNAME=postgres
 WORKFLOW_DB_PASSWORD=root
 ```
 
-Redis defaults to `localhost:6379`. Production configuration has no database credential defaults, disables Flyway baselining,
-and disables Flowable schema auto-update. Database migrations are managed by Flyway; only the explicit `local` profile lets
+Redis defaults to `localhost:6379`. Production configuration has no database credential defaults
+and disables Flowable schema auto-update. Platform tables come from the scripts in `db/`, applied by hand; only the explicit `local` profile lets
 Flowable update its own engine tables.
 
 ## Build
@@ -183,4 +181,4 @@ mvn verify
 `verify` enforces the JDK/Maven baseline, Java conventions, SpotBugs high-priority findings, and a minimum tested-code
 coverage floor. ArchUnit tests prevent domain-to-framework, application-to-infrastructure, direct REST-to-domain,
 and cross-bounded-context infrastructure dependencies. Docker-enabled environments additionally run PostgreSQL,
-Redis, Flyway, Flowable, and HTTP security integration tests through Testcontainers.
+Redis, DB script, Flowable, and HTTP security integration tests through Testcontainers (the tests apply every `db/` script to a fresh database).

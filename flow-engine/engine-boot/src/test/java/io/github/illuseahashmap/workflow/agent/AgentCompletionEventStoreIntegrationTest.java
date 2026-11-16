@@ -2,12 +2,13 @@ package io.github.illuseahashmap.workflow.agent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.illuseahashmap.workflow.integration.DatabaseScripts;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
-import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -29,9 +30,8 @@ class AgentCompletionEventStoreIntegrationTest {
     void setUp() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
-        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/platform")
-                .cleanDisabled(false).load().clean();
-        Flyway.configure().dataSource(dataSource).locations("classpath:db/migration/platform").load().migrate();
+        new JdbcTemplate(dataSource).execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
+        DatabaseScripts.apply(POSTGRES);
         jdbcTemplate = new NamedParameterJdbcTemplate(dataSource);
         eventStore = new AgentCompletionEventStore(
                 jdbcTemplate, new TransactionTemplate(new DataSourceTransactionManager(dataSource)));

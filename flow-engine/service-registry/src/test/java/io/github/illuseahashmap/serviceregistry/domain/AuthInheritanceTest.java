@@ -7,12 +7,33 @@ import org.junit.jupiter.api.Test;
 class AuthInheritanceTest {
 
     @Test
-    void selectsSharedOperationOrNoAuth() {
-        AuthConfig shared = new AuthConfig(AuthType.BEARER, null, "shared-token");
-        AuthConfig own = new AuthConfig(AuthType.API_KEY, "X-Api-Key", "op-token");
-        assertEquals(shared, AuthInheritance.resolve(AuthMode.INHERIT, shared, own));
-        assertEquals(own, AuthInheritance.resolve(AuthMode.OVERRIDE, shared, own));
-        // NONE drops both the shared secret and the operation secret.
-        assertEquals(new AuthConfig(AuthType.NONE, null, null), AuthInheritance.resolve(AuthMode.NONE, shared, own));
+    void selectsServiceOperationOrNoAuthorization() {
+        Authorization service = new Authorization(AuthType.BEARER, null, null, null,
+                new CredentialValue(CredentialSource.SECRET, "crmToken"), null, null, null, null);
+        Authorization own = new Authorization(AuthType.API_KEY, "X-Api-Key", null, null,
+                new CredentialValue(CredentialSource.SECRET, "opKey"), null, null, null, null);
+        assertEquals(service, AuthInheritance.resolve(AuthMode.INHERIT, service, own));
+        assertEquals(service, AuthInheritance.resolve(null, service, own));
+        assertEquals(own, AuthInheritance.resolve(AuthMode.OVERRIDE, service, own));
+        // NONE drops the service authorization for a public operation.
+        assertEquals(Authorization.NONE, AuthInheritance.resolve(AuthMode.NONE, service, own));
+    }
+
+    @Test
+    void secretValuesCanNeverBeWrittenInTheModel() {
+        Authorization literalToken = new Authorization(AuthType.BEARER, null, null, null,
+                new CredentialValue(CredentialSource.VALUE, "abc"), null, null, null, null);
+        assertEquals(1, literalToken.problems().size());
+        Authorization header = new Authorization(AuthType.CUSTOM_HEADER, "X-Tenant", null, null,
+                new CredentialValue(CredentialSource.VALUE, "abc"), null, null, null, null);
+        assertEquals(0, header.problems().size());
+        Authorization noHeader = new Authorization(AuthType.API_KEY, null, null, null,
+                new CredentialValue(CredentialSource.SECRET, "k"), null, null, null, null);
+        assertEquals(1, noHeader.problems().size());
+        Authorization basic = new Authorization(AuthType.BASIC, null, null,
+                new CredentialValue(CredentialSource.VALUE, "svc"),
+                new CredentialValue(CredentialSource.EXPRESSION, "${tenant.crmPassword}"), null, null, null, null);
+        assertEquals(0, basic.problems().size());
+        assertEquals(java.util.Set.of("crmPassword"), basic.tenantVariables());
     }
 }

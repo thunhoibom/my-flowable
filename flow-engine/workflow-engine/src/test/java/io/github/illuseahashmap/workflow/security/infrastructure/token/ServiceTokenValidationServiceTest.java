@@ -34,7 +34,7 @@ class ServiceTokenValidationServiceTest {
         ServiceTokenPayload payload = payload("tenant-b", 2);
 
         BusinessException exception = assertThrows(BusinessException.class, () -> validationService.validate(
-                payload, client, "POST", "/workflow/process/start", "hash"));
+                payload, client, "POST", "/api/runtime/process/start", "hash"));
 
         assertEquals("Workflow client cannot access this tenant", exception.getMessage());
     }
@@ -45,7 +45,7 @@ class ServiceTokenValidationServiceTest {
                 "*", "*", true, null);
 
         BusinessException exception = assertThrows(BusinessException.class, () -> validationService.validate(
-                payload("tenant-a", 1), client, "POST", "/workflow/process/start", "hash"));
+                payload("tenant-a", 1), client, "POST", "/api/runtime/process/start", "hash"));
 
         assertEquals("Workflow token version is invalid", exception.getMessage());
     }
@@ -53,6 +53,6 @@ class ServiceTokenValidationServiceTest {
     private ServiceTokenPayload payload(String tenantCode, int version) {
         return new ServiceTokenPayload(
                 "client", tenantCode, Instant.now().getEpochSecond(), "nonce",
-                "POST", "/workflow/process/start", "hash", version);
+                "POST", "/api/runtime/process/start", "hash", version);
     }
 }

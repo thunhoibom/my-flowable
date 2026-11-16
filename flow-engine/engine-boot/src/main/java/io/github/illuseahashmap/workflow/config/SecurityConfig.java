@@ -48,8 +48,9 @@ public class SecurityConfig {
                                 || request.getRequestURI().startsWith("/service-callbacks/")))
                         .ignoringRequestMatchers(request -> StringUtils.hasText(
                                 request.getHeader(ServiceTokenAuthenticationFilter.TOKEN_HEADER)))
-                        // Admin API called by Flow Admin BE with the user token in a header: not forgeable cross-site.
-                        .ignoringRequestMatchers(request -> request.getRequestURI().startsWith("/api/admin/")
+                        // Admin and Runtime API called with the user token in a header: not forgeable cross-site.
+                        .ignoringRequestMatchers(request -> (request.getRequestURI().startsWith("/api/admin/")
+                                || request.getRequestURI().startsWith("/api/runtime/"))
                                 && StringUtils.startsWithIgnoreCase(
                                         request.getHeader(org.springframework.http.HttpHeaders.AUTHORIZATION),
                                         "Bearer "))

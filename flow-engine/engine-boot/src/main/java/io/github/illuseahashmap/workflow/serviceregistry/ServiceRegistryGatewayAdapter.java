@@ -2,7 +2,6 @@ package io.github.illuseahashmap.workflow.serviceregistry;
 
 import io.github.illuseahashmap.serviceregistry.application.PublishedServiceInvoker;
 import io.github.illuseahashmap.serviceregistry.application.ServiceCallException;
-import io.github.illuseahashmap.serviceregistry.domain.AuthType;
 import io.github.illuseahashmap.serviceregistry.domain.InvalidServiceRequestException;
 import io.github.illuseahashmap.serviceregistry.domain.PublishedOperation;
 import io.github.illuseahashmap.workflow.process.application.ServiceParameterException;
@@ -15,6 +14,7 @@ import io.github.illuseahashmap.workflow.process.application.port.ServiceRegistr
 import io.github.illuseahashmap.workflow.process.application.port.ServiceScope;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.UnaryOperator;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -34,9 +34,10 @@ public class ServiceRegistryGatewayAdapter implements ServiceRegistryGateway {
 
     @Override
     public Map<String, Object> invoke(ServiceScope scope, String serviceKey, String operationKey,
-                                      Map<String, Object> resolvedInputs) {
+                                      Map<String, Object> resolvedInputs, UnaryOperator<String> expressions) {
         try {
-            return invoker.invoke(scope.tenantId(), scope.parentDeploymentId(), serviceKey, operationKey, resolvedInputs);
+            return invoker.invoke(scope.tenantId(), scope.parentDeploymentId(), serviceKey, operationKey,
+                    resolvedInputs, expressions == null ? null : expressions::apply);
         } catch (InvalidServiceRequestException exception) {
             throw new ServiceParameterException(
                     "service " + serviceKey + " operation " + operationKey + ": " + exception.getMessage());
@@ -58,9 +59,6 @@ public class ServiceRegistryGatewayAdapter implements ServiceRegistryGateway {
                                 output.name(),
                                 ServiceParameterType.valueOf(output.type().name())))
                         .toList(),
-                operation.authType() == AuthType.BEARER_VARIABLE
-                        ? operation.authDetails().bearerVariable()
-                        : null,
                 operation.steps().callStyle().name(),
                 operation.steps().correlationOutput(),
                 operation.steps().waitTimeoutMillis());

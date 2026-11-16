@@ -65,7 +65,7 @@ class ServiceRegistryDelegateTest {
         when(execution.hasVariable("customerName")).thenReturn(true);
         when(execution.getVariable("customerName")).thenReturn("Ann");
         when(gateway.findPublished(SCOPE, "crm", "createLead")).thenReturn(Optional.of(stringContract()));
-        when(gateway.invoke(SCOPE, "crm", "createLead", Map.of("customerName", "Ann"))).thenReturn(Map.of("id", 4));
+        when(gateway.invoke(eq(SCOPE), eq("crm"), eq("createLead"), eq(Map.of("customerName", "Ann")), any())).thenReturn(Map.of("id", 4));
 
         delegate.execute(execution);
 
@@ -80,7 +80,7 @@ class ServiceRegistryDelegateTest {
 
         delegate.execute(execution);
 
-        verify(gateway).invoke(SCOPE, "crm", "createLead", Map.of("customerName", "ACTIVE"));
+        verify(gateway).invoke(eq(SCOPE), eq("crm"), eq("createLead"), eq(Map.of("customerName", "ACTIVE")), any());
     }
 
     @Test
@@ -93,7 +93,7 @@ class ServiceRegistryDelegateTest {
                 .isInstanceOf(ServiceParameterException.class)
                 .hasMessageContaining("customerName")
                 .hasMessageContaining("required value is missing");
-        verify(gateway, never()).invoke(any(), any(), any(), any());
+        verify(gateway, never()).invoke(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -106,7 +106,7 @@ class ServiceRegistryDelegateTest {
                 .isInstanceOf(ServiceParameterException.class)
                 .hasMessage("service crm operation createLead parameter customerName: expression failed")
                 .matches(error -> error.getCause() != null && !error.getMessage().contains("Ann"));
-        verify(gateway, never()).invoke(any(), any(), any(), any());
+        verify(gateway, never()).invoke(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -124,7 +124,7 @@ class ServiceRegistryDelegateTest {
                 .matches(error -> error.getCause() != null
                         && !error.getMessage().contains("Ann")
                         && !error.getMessage().contains("absent"));
-        verify(gateway, never()).invoke(any(), any(), any(), any());
+        verify(gateway, never()).invoke(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -138,7 +138,7 @@ class ServiceRegistryDelegateTest {
         assertThatThrownBy(() -> delegate.execute(execution))
                 .isInstanceOf(ServiceParameterException.class)
                 .hasMessageContaining("cannot coerce value");
-        verify(gateway, never()).invoke(any(), any(), any(), any());
+        verify(gateway, never()).invoke(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -150,7 +150,7 @@ class ServiceRegistryDelegateTest {
         assertThatThrownBy(() -> delegate.execute(execution))
                 .isInstanceOf(ServiceParameterException.class)
                 .hasMessageContaining("required value is missing");
-        verify(gateway, never()).invoke(any(), any(), any(), any());
+        verify(gateway, never()).invoke(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -162,7 +162,7 @@ class ServiceRegistryDelegateTest {
 
         delegate.execute(execution);
 
-        verify(gateway).invoke(SCOPE, "crm", "createLead", Map.of());
+        verify(gateway).invoke(eq(SCOPE), eq("crm"), eq("createLead"), eq(Map.of()), any());
     }
 
     @Test
@@ -172,7 +172,7 @@ class ServiceRegistryDelegateTest {
         when(gateway.findPublished(SCOPE, "crm", "createLead")).thenReturn(Optional.of(new PublishedCallContract(
                 List.of(),
                 List.of(new ServiceOutputContract("id", ServiceParameterType.LONG)))));
-        when(gateway.invoke(SCOPE, "crm", "createLead", Map.of())).thenReturn(Map.of("id", "nope"));
+        when(gateway.invoke(eq(SCOPE), eq("crm"), eq("createLead"), eq(Map.of()), any())).thenReturn(Map.of("id", "nope"));
 
         assertThatThrownBy(() -> delegate.execute(execution))
                 .isInstanceOf(ServiceParameterException.class)
@@ -187,7 +187,7 @@ class ServiceRegistryDelegateTest {
             when(execution.getCurrentFlowElement()).thenReturn(serviceTask("[]", "[]"));
             when(gateway.findPublished(SCOPE, "crm", "createLead")).thenReturn(Optional.of(new PublishedCallContract(
                     List.of(), List.of())));
-            when(gateway.invoke(eq(SCOPE), eq("crm"), eq("createLead"), eq(Map.of())))
+            when(gateway.invoke(eq(SCOPE), eq("crm"), eq("createLead"), eq(Map.of()), any()))
                     .thenThrow(new ServiceRegistryCallException(code));
 
             assertThatThrownBy(() -> delegate.execute(execution))
@@ -195,19 +195,6 @@ class ServiceRegistryDelegateTest {
                     .extracting(error -> ((BpmnError) error).getErrorCode())
                     .isEqualTo(code);
         }
-    }
-
-    @Test
-    void passesTheBearerVariableFromTheProcess() {
-        when(execution.getCurrentFlowElement()).thenReturn(serviceTask("[]", "[]"));
-        when(gateway.findPublished(SCOPE, "crm", "createLead")).thenReturn(Optional.of(
-                new PublishedCallContract(List.of(), List.of(), "accessToken")));
-        when(execution.getVariable("accessToken")).thenReturn("tok");
-        when(gateway.invoke(SCOPE, "crm", "createLead", Map.of("accessToken", "tok"))).thenReturn(Map.of());
-
-        delegate.execute(execution);
-
-        verify(gateway).invoke(SCOPE, "crm", "createLead", Map.of("accessToken", "tok"));
     }
 
     @Test
@@ -219,7 +206,7 @@ class ServiceRegistryDelegateTest {
                 .isInstanceOf(BpmnError.class)
                 .extracting(error -> ((BpmnError) error).getErrorCode())
                 .isEqualTo("SERVICE_NOT_PUBLISHED");
-        verify(gateway, never()).invoke(any(), any(), any(), any());
+        verify(gateway, never()).invoke(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -231,11 +218,10 @@ class ServiceRegistryDelegateTest {
         when(gateway.findPublished(SCOPE, "crm", "createLead")).thenReturn(Optional.of(new PublishedCallContract(
                 List.of(),
                 List.of(new ServiceOutputContract("id", ServiceParameterType.STRING)),
-                null,
                 "CALLBACK",
                 "id",
                 5000)));
-        when(gateway.invoke(SCOPE, "crm", "createLead", Map.of())).thenReturn(Map.of("id", "abc"));
+        when(gateway.invoke(eq(SCOPE), eq("crm"), eq("createLead"), eq(Map.of()), any())).thenReturn(Map.of("id", "abc"));
 
         delegate.execute(execution);
 
@@ -249,11 +235,10 @@ class ServiceRegistryDelegateTest {
         when(gateway.findPublished(SCOPE, "crm", "createLead")).thenReturn(Optional.of(new PublishedCallContract(
                 List.of(),
                 List.of(new ServiceOutputContract("id", ServiceParameterType.STRING)),
-                null,
                 "CALLBACK",
                 "id",
                 5000)));
-        when(gateway.invoke(SCOPE, "crm", "createLead", Map.of())).thenReturn(Map.of("id", "abc"));
+        when(gateway.invoke(eq(SCOPE), eq("crm"), eq("createLead"), eq(Map.of()), any())).thenReturn(Map.of("id", "abc"));
 
         assertThatThrownBy(() -> delegate.execute(execution))
                 .isInstanceOf(ServiceParameterException.class)
@@ -270,11 +255,11 @@ class ServiceRegistryDelegateTest {
         ServiceScope latest = ServiceScope.latest("tenant-a");
         when(gateway.findPublished(latest, "crm", "createLead")).thenReturn(Optional.of(new PublishedCallContract(
                 List.of(), List.of())));
-        when(gateway.invoke(latest, "crm", "createLead", Map.of())).thenReturn(Map.of());
+        when(gateway.invoke(eq(latest), eq("crm"), eq("createLead"), eq(Map.of()), any())).thenReturn(Map.of());
 
         delegate.execute(execution);
 
-        verify(gateway).invoke(latest, "crm", "createLead", Map.of());
+        verify(gateway).invoke(eq(latest), eq("crm"), eq("createLead"), eq(Map.of()), any());
     }
 
     private static PublishedCallContract stringContract() {

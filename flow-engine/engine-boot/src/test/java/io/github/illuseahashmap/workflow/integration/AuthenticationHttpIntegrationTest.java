@@ -4,6 +4,8 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -68,8 +70,8 @@ class AuthenticationHttpIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("spring.flyway.baseline-on-migrate", () -> "true");
-        registry.add("spring.flyway.baseline-version", () -> "0");
+        // Schema is managed by hand (flow-engine/db); tests apply the same scripts.
+        DatabaseScripts.apply(POSTGRES);
         registry.add("flowable.database-schema-update", () -> "true");
         registry.add("flowable.async-executor-activate", () -> "false");
         registry.add("workflow.security.enabled", () -> "false");
@@ -83,6 +85,8 @@ class AuthenticationHttpIntegrationTest {
         registry.add("workflow.auth.keycloak.client-secret", () -> "test-secret");
         registry.add("workflow.auth.keycloak.allowed-client-ids", () -> FakeKeycloak.CLIENT_ID);
         registry.add("workflow.auth.eim.app-code", () -> FakeKeycloak.CLIENT_ID);
+        registry.add("workflow.service.secrets.master-key-base64", () -> java.util.Base64.getEncoder()
+                .encodeToString("0123456789abcdef0123456789abcdef".getBytes(java.nio.charset.StandardCharsets.UTF_8)));
     }
 
     @AfterAll
@@ -116,20 +120,20 @@ class AuthenticationHttpIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.username").value("designer"))
                 .andExpect(jsonPath("$.data.roles[0]").value("WF_ADMIN"));
-        mockMvc.perform(get("/api/admin/service-environments").cookie(accessCookie))
+        mockMvc.perform(get("/api/admin/secrets").cookie(accessCookie))
                 .andExpect(status().isOk());
     }
 
     @Test
     void endpointsAcceptOnlyTheRolesTheyList() throws Exception {
-        mockMvc.perform(get("/api/admin/service-environments").with(bearer("viewer")))
+        mockMvc.perform(get("/api/admin/secrets").with(bearer("viewer")))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(get("/auth/access/members").with(bearer("designer")))
+        mockMvc.perform(get("/api/admin/members").with(bearer("designer")))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(get("/auth/access/members").with(bearer("platform")))
+        mockMvc.perform(get("/api/admin/members").with(bearer("platform")))
                 .andExpect(status().isOk());
         // Signed in to the realm but no workflow role: nothing is allowed.
-        mockMvc.perform(get("/api/admin/service-environments").with(bearer("rsa-only")))
+        mockMvc.perform(get("/api/admin/secrets").with(bearer("rsa-only")))
                 .andExpect(status().isForbidden());
     }
 
@@ -152,6 +156,13 @@ class AuthenticationHttpIntegrationTest {
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/admin/process-instances").with(bearer("rsa-only")))
                 .andExpect(status().isForbidden());
+        // Runtime API reads for the Work area.
+        mockMvc.perform(get("/api/runtime/tasks/inbox").with(bearer("viewer")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/runtime/process-definitions/startable").with(bearer("viewer")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/runtime/process-definitions/startable").with(bearer("designer")))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -212,6 +223,74 @@ class AuthenticationHttpIntegrationTest {
                         .content("""
                                 {"username":"protected-user","password":"protected-password"}
                                 """))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void secretsOauth2ClientsAndTenantVariablesNeverReturnSecretValues() throws Exception {
+        mockMvc.perform(post("/api/admin/secrets").with(bearer("designer")).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"crmToken","value":"top-secret-1"}
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/admin/secrets").with(bearer("designer")).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"crmToken","value":"again"}
+                                """))
+                .andExpect(status().isConflict());
+        String secrets = mockMvc.perform(get("/api/admin/secrets").with(bearer("designer")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].name").value("crmToken"))
+                .andReturn().getResponse().getContentAsString();
+        org.assertj.core.api.Assertions.assertThat(secrets).doesNotContain("top-secret-1");
+        mockMvc.perform(post("/api/admin/secrets").with(bearer("viewer")).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"other","value":"x"}
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/admin/oauth2-clients/crm-oauth").with(bearer("designer"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"tokenUri":"https://idp.example/token","scopes":["crm"]}
+                                """))
+                .andExpect(status().isBadRequest());
+        String client = mockMvc.perform(put("/api/admin/oauth2-clients/crm-oauth").with(bearer("designer"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clientSecret":"client-secret-1","tokenUri":"https://idp.example/token","scopes":["crm"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.clientId").value("crm-oauth"))
+                .andExpect(jsonPath("$.data.grantType").value("CLIENT_CREDENTIALS"))
+                .andReturn().getResponse().getContentAsString();
+        org.assertj.core.api.Assertions.assertThat(client).doesNotContain("client-secret-1");
+
+        mockMvc.perform(put("/api/admin/tenant-variables/crm-url").with(bearer("designer"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"value":"https://crm.dev"}
+                                """))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/admin/tenant-variables/crmPassword").with(bearer("designer"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"value":"p@ss","protectedValue":true}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.value").value("******"));
+        mockMvc.perform(put("/api/admin/tenant-variables/crmPassword").with(bearer("designer"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"value":"plain","protectedValue":false}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(delete("/api/admin/secrets/crmToken").with(bearer("designer")))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/admin/oauth2-clients/crm-oauth").with(bearer("designer")))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete("/api/admin/tenant-variables/crmPassword").with(bearer("designer")))
                 .andExpect(status().isOk());
     }
 

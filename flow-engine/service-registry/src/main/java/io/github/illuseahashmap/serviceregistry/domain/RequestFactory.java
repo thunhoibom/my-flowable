@@ -135,15 +135,18 @@ public final class RequestFactory {
             Map<String, Object> values) {
         AuthType type = operation.authType() == null ? AuthType.NONE : operation.authType();
         return switch (type) {
-            case NONE, OAUTH2_CLIENT, HMAC, AWS_SIG_V4 -> null;
+            case NONE, HMAC, AWS_SIG_V4 -> null;
             case BEARER -> {
                 if (operation.secret() != null) {
                     headers.put("Authorization", "Bearer " + operation.secret());
                 }
                 yield null;
             }
-            case BEARER_VARIABLE -> {
-                headers.put("Authorization", "Bearer " + bearerVariable(operation, values));
+            case CUSTOM_HEADER -> {
+                if (operation.apiKeyHeader() == null || operation.apiKeyHeader().isBlank()) {
+                    throw new InvalidServiceRequestException("Custom header name is required");
+                }
+                headers.put(operation.apiKeyHeader(), operation.secret() == null ? "" : operation.secret());
                 yield null;
             }
             case BASIC -> {
@@ -206,18 +209,6 @@ public final class RequestFactory {
         } catch (java.security.GeneralSecurityException exception) {
             throw new IllegalStateException("HmacSHA256 is required", exception);
         }
-    }
-
-    private static String bearerVariable(PublishedOperation operation, Map<String, Object> values) {
-        String name = operation.authDetails().bearerVariable();
-        if (name == null || name.isBlank()) {
-            throw new InvalidServiceRequestException("Bearer variable is required");
-        }
-        Object value = values.get(name);
-        if (value == null || String.valueOf(value).isBlank()) {
-            throw new InvalidServiceRequestException("Bearer variable is required");
-        }
-        return String.valueOf(value);
     }
 
     private static byte[] payloadBytes(BuiltBody built) {

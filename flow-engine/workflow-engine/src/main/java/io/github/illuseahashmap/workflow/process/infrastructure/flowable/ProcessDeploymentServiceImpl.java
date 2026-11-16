@@ -85,7 +85,7 @@ public class ProcessDeploymentServiceImpl implements ProcessDeploymentService {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "Dịch vụ " + key + " bị gửi hai lần");
             }
             try {
-                services.put(key, serviceSupport.designOnly(key, service));
+                services.put(key, serviceSupport.serviceResource(key, service));
             } catch (IllegalArgumentException exception) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST,
                         "Dịch vụ " + key + " không hợp lệ: " + exception.getMessage());
@@ -107,12 +107,13 @@ public class ProcessDeploymentServiceImpl implements ProcessDeploymentService {
         if (previous.isPresent()) {
             return previous.get();
         }
-        Set<String> withoutEnvironment = serviceSupport.withoutEnvironment(
-                tenant.tenantId(), deployer.serviceKeys(command.bpmnXml()));
-        if (!withoutEnvironment.isEmpty()) {
+        Set<String> called = deployer.serviceKeys(command.bpmnXml());
+        Map<String, byte[]> calledServices = new TreeMap<>(command.services());
+        calledServices.keySet().retainAll(called);
+        Set<String> missing = serviceSupport.missingConfiguration(tenant.tenantId(), calledServices);
+        if (!missing.isEmpty()) {
             throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "Các dịch vụ chưa có cấu hình môi trường trên Flow Engine này: "
-                            + String.join(", ", withoutEnvironment));
+                    "Flow Engine này còn thiếu cấu hình mà dịch vụ cần: " + String.join(", ", missing));
         }
         ProcessDefinition previousLatest = lookup.latest(tenant.tenantId(), key).orElse(null);
         ProcessDefinition rulesSource = rulesSource(tenant.tenantId(), key, command, previousLatest);

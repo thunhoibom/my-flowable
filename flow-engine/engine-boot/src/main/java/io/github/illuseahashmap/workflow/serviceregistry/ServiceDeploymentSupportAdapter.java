@@ -2,31 +2,36 @@ package io.github.illuseahashmap.workflow.serviceregistry;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.illuseahashmap.serviceregistry.application.ServiceSettingsSource;
+import io.github.illuseahashmap.serviceregistry.application.ServiceEnvironment;
+import io.github.illuseahashmap.serviceregistry.domain.Authorization;
 import io.github.illuseahashmap.serviceregistry.domain.PublishedService;
 import io.github.illuseahashmap.serviceregistry.engine.ServiceModelJson;
 import io.github.illuseahashmap.workflow.process.application.port.ServiceDeploymentSupport;
-import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import org.springframework.stereotype.Component;
 
-/** Reads service definitions sent with a deployment, and tells which services have no environment settings. */
+/**
+ * Reads the service models sent with a deployment, and tells which secrets, OAuth2 clients and tenant variables
+ * they reference that this Flow Engine does not have.
+ */
 @Component
 public class ServiceDeploymentSupportAdapter implements ServiceDeploymentSupport {
 
-    private final ServiceSettingsSource settings;
+    private final ServiceEnvironment environment;
     private final ServiceModelJson json = new ServiceModelJson();
     private final ObjectMapper objectMapper = new ObjectMapper()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
-    public ServiceDeploymentSupportAdapter(ServiceSettingsSource settings) {
-        this.settings = settings;
+    public ServiceDeploymentSupportAdapter(ServiceEnvironment environment) {
+        this.environment = environment;
     }
 
     @Override
-    public byte[] designOnly(String serviceKey, Map<String, Object> definition) {
+    public byte[] serviceResource(String serviceKey, Map<String, Object> definition) {
         PublishedService service;
         try {
             service = objectMapper.convertValue(definition, PublishedService.class);
@@ -39,18 +44,30 @@ public class ServiceDeploymentSupportAdapter implements ServiceDeploymentSupport
         if (service.operations().isEmpty()) {
             throw new IllegalArgumentException("không có operation nào");
         }
-        // Whatever environment data the sender left in, the deployment keeps only the design.
+        List<String> problems = ServiceModelJson.problems(service);
+        if (!problems.isEmpty()) {
+            throw new IllegalArgumentException(String.join("; ", problems));
+        }
         return json.write(service);
     }
 
     @Override
-    public Set<String> withoutEnvironment(String tenantId, Collection<String> serviceKeys) {
-        Set<String> missing = new TreeSet<>();
-        for (String serviceKey : serviceKeys) {
-            if (settings.find(tenantId, serviceKey).isEmpty()) {
-                missing.add(serviceKey);
+    public Set<String> missingConfiguration(String tenantId, Map<String, byte[]> services) {
+        Set<String> secrets = new TreeSet<>();
+        Set<String> clients = new TreeSet<>();
+        Set<String> variables = new TreeSet<>();
+        for (byte[] content : services.values()) {
+            PublishedService service = json.read(content);
+            for (Authorization authorization : ServiceModelJson.authorizations(service)) {
+                secrets.addAll(authorization.secrets());
+                clients.addAll(authorization.oauth2Clients());
             }
+            variables.addAll(ServiceModelJson.tenantVariables(service));
         }
+        Set<String> missing = new LinkedHashSet<>();
+        environment.missingSecrets(tenantId, secrets).forEach(name -> missing.add("secret " + name));
+        environment.missingOauth2Clients(tenantId, clients).forEach(key -> missing.add("OAuth2 client " + key));
+        environment.missingTenantVariables(tenantId, variables).forEach(name -> missing.add("biến tenant " + name));
         return missing;
     }
 }

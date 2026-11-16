@@ -31,7 +31,7 @@ class JdbcCallbackWaitStoreTest {
                     "V34__service_catalog_foundation", "V35__service_http_content", "V36__service_extended_auth",
                     "V37__service_multi_step", "V41__service_engine"}) {
                 String sql = new String(JdbcCallbackWaitStoreTest.class.getResourceAsStream(
-                        "/db/migration/platform/" + script + ".sql").readAllBytes(), StandardCharsets.UTF_8);
+                        "/db/" + script + ".sql").readAllBytes(), StandardCharsets.UTF_8);
                 for (String command : sql.split(";")) {
                     if (!command.isBlank()) {
                         statement.execute(command);

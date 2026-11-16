@@ -11,9 +11,9 @@ public final class InMemoryServiceRepositoryService implements ServiceRepository
 
     private final Map<String, PublishedService> byParentAndKey = new HashMap<>();
 
-    /** Stores the design-only copy, as a deployment would. */
+    /** Stores the model without resolved credentials, as a deployment would. */
     public void deploy(String parentDeploymentId, PublishedService service) {
-        byParentAndKey.put(parentDeploymentId + "/" + service.serviceKey(), ServiceModelJson.designOnly(service));
+        byParentAndKey.put(parentDeploymentId + "/" + service.serviceKey(), ServiceModelJson.modelOnly(service));
     }
 
     @Override

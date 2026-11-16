@@ -3,7 +3,7 @@ package io.github.illuseahashmap.workflow.process.interfaces.rest;
 import io.github.illuseahashmap.workflow.process.application.WorkflowRuntimeService;
 import io.github.illuseahashmap.workflow.process.application.dto.ReassignTaskRequest;
 import io.github.illuseahashmap.workflow.process.application.dto.TaskView;
-import io.github.illuseahashmap.workflow.shared.context.AdminRoles;
+import io.github.illuseahashmap.workflow.shared.context.ApiRoles;
 import io.github.illuseahashmap.workflow.shared.response.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,7 +28,7 @@ public class AdminTaskController {
     }
 
     @PostMapping("/{taskId}/reassign")
-    @PreAuthorize(AdminRoles.OPERATE)
+    @PreAuthorize(ApiRoles.OPERATE)
     public ApiResponse<TaskView> reassign(@PathVariable String taskId,
                                           @Valid @RequestBody ReassignTaskRequest request) {
         return ApiResponse.ok(runtime.reassign(taskId, request));
